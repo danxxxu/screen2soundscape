@@ -1,0 +1,43 @@
+# Godot-specific files
+.import/
+export.cfg
+export_presets.cfg
+export.*
+debug.*
+*.import
+*.godot
+*.tmp
+
+# Godot cache
+.cache/
+
+# Mono / C# specific files and folders (if you're using C#)
+.mono/
+*.csproj
+*.sln
+*.userprefs
+*.pidb
+*.rsp
+*.mdb
+
+# Build output (if any)
+bin/
+build/
+*.exe
+*.apk
+*.app
+*.ipa
+
+# OS or editor specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VSCode settings (optional)
+.vscode/
+
+# Other temporary files
+*.log
+.idea/
+
+node_modules/
