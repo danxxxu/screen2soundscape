@@ -1,0 +1,95 @@
+[gd_scene load_steps=15 format=3 uid="uid://cwrxsfnvowad6"]
+
+[ext_resource type="AudioStream" uid="uid://d21tjv3cyi4b2" path="res://ambient-noise-236388.mp3" id="1_cy7eh"]
+[ext_resource type="Script" path="res://scene.gd" id="1_ojrou"]
+[ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://player.tscn" id="2_lveax"]
+[ext_resource type="Texture2D" uid="uid://dcr1a2if65q1y" path="res://rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
+[ext_resource type="AudioStream" uid="uid://dpdbytt4atqal" path="res://Shake and Bake.mp3" id="3_yxa1m"]
+[ext_resource type="AudioStream" uid="uid://cyxe536c4i73x" path="res://mixkit-rain-loop-1250.wav" id="4_u6vwu"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
+sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+ground_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+
+[sub_resource type="Sky" id="Sky_6xlsm"]
+sky_material = SubResource("ProceduralSkyMaterial_d4ooh")
+
+[sub_resource type="Environment" id="Environment_7sdms"]
+background_mode = 2
+sky = SubResource("Sky_6xlsm")
+tonemap_mode = 2
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_xluca"]
+size = Vector2(1000, 1000)
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_gau4i"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i7ydk"]
+albedo_texture = ExtResource("3_jbj3m")
+normal_texture = SubResource("CompressedTexture2D_gau4i")
+uv1_scale = Vector3(60, 60, 60)
+uv2_scale = Vector3(60, 60, 60)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_a6j3j"]
+size = Vector3(1000, 1, 1000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jkbgw"]
+
+[node name="Scene" type="Node3D"]
+script = ExtResource("1_ojrou")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_7sdms")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 33.039, 0)
+shadow_enabled = true
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="HUD"]
+offset_right = 40.0
+offset_bottom = 23.0
+text = "Screen to Soundscape DEMO
+Keyboard Arrows to move
+Approach the boxes
+Shift to play distance
+Q to hear whats on the left
+E to hear whats on the right"
+
+[node name="Background Sound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("1_cy7eh")
+volume_db = -14.61
+autoplay = true
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_xluca")
+surface_material_override/0 = SubResource("StandardMaterial3D_i7ydk")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="Floor"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor/StaticBody3D"]
+shape = SubResource("BoxShape3D_a6j3j")
+
+[node name="Player" parent="." instance=ExtResource("2_lveax")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.90205, -2)
+
+[node name="Target" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40.4765, 1.49031, -46.1743)
+mesh = SubResource("BoxMesh_jkbgw")
+skeleton = NodePath("AudioStreamPlayer3D")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Target"]
+transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
+stream = ExtResource("3_yxa1m")
+volume_db = -7.524
+autoplay = true
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0213, 1.49, 8.5704)
+mesh = SubResource("BoxMesh_jkbgw")
+skeleton = NodePath("AudioStreamPlayer3D2")
+
+[node name="AudioStreamPlayer3D2" type="AudioStreamPlayer3D" parent="MeshInstance3D2"]
+transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
+stream = ExtResource("4_u6vwu")
