@@ -48,14 +48,19 @@ shadow_enabled = true
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Label" type="Label" parent="HUD"]
-offset_right = 40.0
-offset_bottom = 23.0
+offset_left = 15.0
+offset_top = 15.0
+offset_right = 481.0
+offset_bottom = 246.0
 text = "Screen to Soundscape DEMO
 Keyboard Arrows to move
 Approach the boxes
 Shift to play distance
-Q to hear whats on the left
-E to hear whats on the right"
+WASD to move 
+<- and -> arrows to rotate
+Q to hear whats on the left (TEST version)
+E to hear whats on the right (TEST version)
+Tab to switch target (distance sensor will switch accordingly)"
 
 [node name="Background Sound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("1_cy7eh")
@@ -82,14 +87,16 @@ skeleton = NodePath("AudioStreamPlayer3D")
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Target"]
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("3_yxa1m")
-volume_db = -7.524
+volume_db = -15.89
 autoplay = true
 
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
+[node name="RainTarget" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0213, 1.49, 8.5704)
 mesh = SubResource("BoxMesh_jkbgw")
 skeleton = NodePath("AudioStreamPlayer3D2")
 
-[node name="AudioStreamPlayer3D2" type="AudioStreamPlayer3D" parent="MeshInstance3D2"]
+[node name="AudioStreamPlayer3D2" type="AudioStreamPlayer3D" parent="RainTarget"]
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("4_u6vwu")
+volume_db = -15.89
+autoplay = true

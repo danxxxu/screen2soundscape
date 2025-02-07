@@ -11,6 +11,10 @@ var target_velocity = Vector3.ZERO
 @onready var camera := $Neck/Camera3D
 @onready var distance_audio := $"distance_stream"
 @onready var target := $"../Target"
+@onready var target2 := $"../RainTarget"
+
+
+@onready var currentTarget := target
 
 
 var min_distance = 5.0  # Closest distance (highest pitch)
@@ -27,17 +31,23 @@ func _input(event):
 				distance_audio.play()	
 		elif not event.pressed and event.keycode == KEY_SHIFT:
 			distance_audio.stop()  # Stop when Shift is released
-		
 		if event.pressed and event.keycode == KEY_E:
 			speak('Road on the right.')
-			
 		if event.pressed and event.keycode == KEY_Q:
 			speak('Building on the left.')
+		if event.pressed and event.keycode == KEY_TAB:
+			if currentTarget == target:
+				currentTarget = target2
+				speak('To the Fountain')
+			else:
+				currentTarget = target
+				speak('To the elevator')
+				
 			
 
 func _process(delta):
-	if target:
-		var distance = global_position.distance_to(target.global_position)
+	if currentTarget:
+		var distance = global_position.distance_to(currentTarget.global_position)
 		update_pitch(distance)
 
 func update_pitch(distance):
@@ -68,7 +78,10 @@ func speak(text, lang="en-US"):
 		DisplayServer.tts_speak(text, DisplayServer.tts_get_voices()[0]["id"])
 
 func _ready():	
-	speak("Hello! Walk through the room to find the elevator. Hold the shift key to hear the approximate distance. Press Q key to check whats on the left and E key for the right side.")
+	speak("Hello! Walk through the space to find the elevator or the fountain.
+	Hold the shift key to hear the approximate distance. 
+	
+	Press Tab to switch target.")
 	
 			
 func _physics_process(delta):
