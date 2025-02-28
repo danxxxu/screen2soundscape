@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://banloe8guvh8w"]
 
 [ext_resource type="Script" path="res://player.gd" id="1_q2squ"]
-[ext_resource type="AudioStream" uid="uid://c5auq72sbv3sh" path="res://sounds/100bpmsmoothvibe.wav" id="2_vqdj0"]
+[ext_resource type="AudioStream" uid="uid://c82470k6sdgca" path="res://sounds/100bpmsmoothvibe.wav" id="2_vqdj0"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 
@@ -11,10 +11,12 @@
 script = ExtResource("1_q2squ")
 
 [node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.761815, 0)
 visible = false
 mesh = SubResource("CapsuleMesh_cpk1c")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 1, 0)
 shape = SubResource("BoxShape3D_1beah")
 
 [node name="Neck" type="Node3D" parent="."]
