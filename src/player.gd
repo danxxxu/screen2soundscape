@@ -20,6 +20,9 @@ var base_pitch: float   = 1.0     # Default pitch at mid-range
 var min_pitch: float    = 0.5      # Lowest pitch
 var max_pitch: float    = 2.0      # Highest pitch
 
+#preload different footstep sounds, still working on it 
+#const footstep_grass = preload("res://sounds/footsteps/footstep_grass.wav")
+#const footstep_concrete = preload("res://sounds/footsteps/footstep_concrete.wav")
 
 func _input(event):
 	if event is InputEventKey:
@@ -92,6 +95,7 @@ func _physics_process(delta):
 	# Moving the Character
 	velocity = target_velocity
 	move_and_slide()
+	footstep(velocity)
 	## Define a turn speed (radians per second)
 	var turn_speed: float = 3.0
 
@@ -103,3 +107,16 @@ func _physics_process(delta):
 		neck.rotate_y(-turn_speed * delta)
 		#camera.rotate_x(-turn_speed * delta)
 		
+
+
+# footstep sounds
+func footstep(vel):
+	#$footstep.stream = footstep_concrete
+	if(vel.length() != 0):
+		if($Timer.time_left <= 0):
+			$footstep.pitch_scale = randf_range(0.8, 1.2)
+			$footstep.play()
+#			walk cycle/loop length 
+			$Timer.start(0.3)
+	else:
+		$footstep.stream_paused=true
