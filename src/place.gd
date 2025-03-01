@@ -1,6 +1,6 @@
 extends Node3D
 class_name Place
-const PlaceData = preload("res://models/place.gd")
+const PlaceData = preload("res://models/Place.gd")
 @export var place_data: PlaceData
 
 func set_place_data(data: PlaceData):

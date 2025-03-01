@@ -1,6 +1,6 @@
 extends Node3D
 "res://rocky_terrain_02_diff_4k.jpg"
-const PlaceData = preload("res://models/place.gd")
+const PlaceData = preload("res://models/Place.gd")
 @export var map_size: Vector3 = Vector3(100, 0, 100) # Define the map size
 @export var place_meshes: Array[PackedScene] # Assign random meshes in the editor
 @export var place_sounds: Array[AudioStream] # Assign random sounds in the editor

@@ -1,11 +1,11 @@
 [gd_scene load_steps=15 format=3 uid="uid://cwrxsfnvowad6"]
 
-[ext_resource type="AudioStream" uid="uid://c11mlc6n5umtt" path="res://ambient-noise-236388.mp3" id="1_cy7eh"]
+[ext_resource type="AudioStream" uid="uid://cxknm8bnxqwaq" path="res://ambient-noise-236388.mp3" id="1_cy7eh"]
 [ext_resource type="Script" path="res://scene.gd" id="1_ojrou"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://player.tscn" id="2_lveax"]
-[ext_resource type="Texture2D" uid="uid://pljurhho6iue" path="res://rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
-[ext_resource type="AudioStream" uid="uid://c3v4ad72s8ur5" path="res://Shake and Bake.mp3" id="3_yxa1m"]
-[ext_resource type="AudioStream" uid="uid://me17brf5y46t" path="res://mixkit-rain-loop-1250.wav" id="4_u6vwu"]
+[ext_resource type="Texture2D" uid="uid://bt306djatc6mm" path="res://rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
+[ext_resource type="AudioStream" uid="uid://bga2g1cd2x5a0" path="res://Shake and Bake.mp3" id="3_yxa1m"]
+[ext_resource type="AudioStream" uid="uid://di6s6u00ob1uy" path="res://mixkit-rain-loop-1250.wav" id="4_u6vwu"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
