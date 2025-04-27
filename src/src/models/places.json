@@ -1,0 +1,898 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.5 1bd436f1",
+  "osm3s": {
+    "timestamp_osm_base": "2025-04-27T13:37:25Z",
+    "timestamp_areas_base": "2025-02-06T02:17:44Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 34044402,
+  "lat": 52.0777507,
+  "lon": 4.3058926,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "27",
+    "addr:postcode": "2513BN",
+    "addr:street": "Torenstraat",
+    "brand": "Albert Heijn",
+    "brand:wikidata": "Q1653985",
+    "brand:wikipedia": "nl:Albert Heijn (supermarkt)",
+    "name": "Albert Heijn",
+    "opening_hours": "Mo-Sa 08:00-22:00; Su 09:00-22:00",
+    "payment:cash": "yes",
+    "phone": "+31 70 365 4469",
+    "ref": "1495",
+    "shop": "supermarket",
+    "source": "BAG;note #3871409",
+    "source:date": "2017-11-08",
+    "website": "https://www.ah.nl/winkel/1495",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 34044413,
+  "lat": 52.0839381,
+  "lon": 4.3322813,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "75",
+    "addr:postcode": "2593AB",
+    "addr:street": "Theresiastraat",
+    "branch": "Albert Heijn Theresiastraat",
+    "brand": "Albert Heijn",
+    "brand:wikidata": "Q1653985",
+    "brand:wikipedia": "nl:Albert Heijn (supermarkt)",
+    "check_date:opening_hours": "2023-05-23",
+    "diet:halal": "no",
+    "name": "Albert Heijn",
+    "note": "ATM inside",
+    "opening_hours": "Mo-Sa 08:00-22:00; Su 09:00-22:00",
+    "phone": "+31 70 382 0132",
+    "ref": "1343",
+    "shop": "supermarket",
+    "source": "survey",
+    "website": "https://www.ah.nl/winkel/1343"
+  }
+},
+{
+  "type": "node",
+  "id": 491613253,
+  "lat": 52.0785266,
+  "lon": 4.3117263,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "1A",
+    "addr:postcode": "2511AA",
+    "addr:street": "Hofweg",
+    "amenity": "cafe",
+    "cuisine": "international",
+    "indoor_seating": "yes",
+    "internet_access": "wlan",
+    "name": "Dudok",
+    "opening_hours": "Su-We 09:30-20:00; Th-Sa 09:30-22:00",
+    "outdoor_seating": "yes",
+    "phone": "+31 70 890 0100",
+    "source": "BAG",
+    "source:date": "2014-02-11",
+    "website": "https://www.dudok.nl",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 568098185,
+  "lat": 52.0765756,
+  "lon": 4.3175066,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "170",
+    "addr:postcode": "2511BW",
+    "addr:street": "Spui",
+    "amenity": "restaurant",
+    "cuisine": "chinese",
+    "name": "Ming Dynasty",
+    "opening_hours": "Mo-Su 12:00-22:00",
+    "source": "BAG",
+    "source:date": "2017-11-08"
+  }
+},
+{
+  "type": "node",
+  "id": 568113932,
+  "lat": 52.0761389,
+  "lon": 4.3144681,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "1",
+    "addr:postcode": "2512HJ",
+    "addr:street": "Rabbijn Maarsenplein",
+    "amenity": "restaurant",
+    "cuisine": "japanese;sushi",
+    "email": "info@momiji-sushi.nl",
+    "name": "Momiji Sushi",
+    "opening_hours": "Su, Tu-Th 11:00-22:00; Mo 12:00-22:00; Fr-Sa 11:00-22:30",
+    "phone": "+31 70 4277999",
+    "source": "BAG",
+    "source:date": "2014-02-11",
+    "website": "https://momiji-sushi.nl/",
+    "website:menu": "https://momiji-sushi.nl/nl/menu"
+  }
+},
+{
+  "type": "node",
+  "id": 581887390,
+  "lat": 52.0798560,
+  "lon": 4.3272016,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "571",
+    "addr:postcode": "2595TZ",
+    "addr:street": "Jan van Riebeekstraat",
+    "amenity": "restaurant",
+    "cuisine": "turkish",
+    "name": "Zirve Restaurant",
+    "website": "https://zirve-restaurant.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 582448865,
+  "lat": 52.0748292,
+  "lon": 4.3142697,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "chinese",
+    "name": "Long Ting"
+  }
+},
+{
+  "type": "node",
+  "id": 582448870,
+  "lat": 52.0740235,
+  "lon": 4.3157097,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "thai",
+    "name": "Song Phi Nong",
+    "source": "www.hetlint.nl",
+    "website": "http://www.song-phi-nong.nl"
+  }
+},
+{
+  "type": "node",
+  "id": 590877615,
+  "lat": 52.0788826,
+  "lon": 4.3368392,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:country": "NL",
+    "addr:housenumber": "100",
+    "addr:postcode": "2595BR",
+    "addr:street": "Prinses Margrietplantsoen",
+    "air_conditioning": "yes",
+    "brand": "nhow",
+    "brand:wikidata": "Q1604631",
+    "internet_access": "wlan",
+    "name": "NH Den Haag",
+    "payment:cash": "yes",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "tourism": "hotel",
+    "url": "http://www.nh-hotels.com/nh/en/hotels/the-netherlands/the-hague/nh-den-haag.html",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 597813918,
+  "lat": 52.0772446,
+  "lon": 4.3250826,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "299",
+    "addr:postcode": "2511VJ",
+    "addr:street": "Boomsluiterskade",
+    "amenity": "pharmacy",
+    "email": "info@apotheekdevolharding.nl",
+    "healthcare": "pharmacy",
+    "name": "De Volharding",
+    "opening_hours": "Mo-Fr 08:00-17:30",
+    "operator": "Apotheek Den Haag",
+    "operator:website": "https://apotheekdenhaag.nl/",
+    "phone": "+31 70 3153 636",
+    "source": "survey",
+    "website": "https://apotheekdenhaag.nl/locaties/apotheek-de-volharding"
+  }
+},
+{
+  "type": "node",
+  "id": 597818297,
+  "lat": 52.0766458,
+  "lon": 4.3387449,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:country": "NL",
+    "addr:housenumber": "31",
+    "addr:postcode": "2595AK",
+    "addr:street": "Prinses Beatrixlaan",
+    "amenity": "cafe",
+    "name": "Lunchroom De Corridor",
+    "source": "survey",
+    "website": "http://www.eetcafedecorridor.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 632798023,
+  "lat": 52.0783679,
+  "lon": 4.3152665,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Balkan Grill",
+    "opening_hours": "Tu-Fr 17:00-22:00; Sa 16:00-22:00; Su 16:00-21:00"
+  }
+},
+{
+  "type": "node",
+  "id": 632856694,
+  "lat": 52.0799652,
+  "lon": 4.3165294,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Leopold",
+    "toilets:wheelchair": "no",
+    "website": "https://www.caferestaurantleopold.nl/",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 737990026,
+  "lat": 52.0791000,
+  "lon": 4.3101068,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "39",
+    "addr:postcode": "2513AH",
+    "addr:street": "Buitenhof",
+    "name": "Corona",
+    "phone": "+31 70 36 379 30",
+    "source": "BAG",
+    "source:date": "2021-09-08",
+    "tourism": "hotel",
+    "website": "https://www.corona.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 737990041,
+  "lat": 52.0785458,
+  "lon": 4.3108746,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Pathé Café"
+  }
+},
+{
+  "type": "node",
+  "id": 737990072,
+  "lat": 52.0789787,
+  "lon": 4.3099113,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "grill",
+    "name": "Bit Grill and Cafe",
+    "website": "https://www.bitgrill.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 737990074,
+  "lat": 52.0789113,
+  "lon": 4.3096186,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "46",
+    "addr:postcode": "2513AH",
+    "addr:street": "Buitenhof",
+    "amenity": "restaurant",
+    "cuisine": "asian",
+    "name": "Umami",
+    "outdoor_seating": "yes",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "website": "https://www.umami-restaurant.com"
+  }
+},
+{
+  "type": "node",
+  "id": 738928042,
+  "lat": 52.0780632,
+  "lon": 4.3103667,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "29",
+    "addr:postcode": "2511AM",
+    "addr:street": "Kettingstraat",
+    "amenity": "restaurant",
+    "email": "info@leuketenendrinken.nl",
+    "name": "Leuk",
+    "opening_hours": "Tu-Sa 12:00-24:00; Su 12:00-17:00",
+    "phone": "+31 70 363 7859",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "website": "https://www.leuketenendrinken.nl"
+  }
+},
+{
+  "type": "node",
+  "id": 738928069,
+  "lat": 52.0778701,
+  "lon": 4.3104325,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "13",
+    "addr:postcode": "2511AM",
+    "addr:street": "Kettingstraat",
+    "amenity": "restaurant",
+    "cuisine": "italian",
+    "diet:gluten_free": "yes",
+    "diet:lactose_free": "yes",
+    "diet:vegan": "yes",
+    "diet:vegetarian": "yes",
+    "name": "Very Italian Pizza",
+    "source": "BAG",
+    "source:date": "2014-02-11"
+  }
+},
+{
+  "type": "node",
+  "id": 738928077,
+  "lat": 52.0772325,
+  "lon": 4.3073529,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "8",
+    "addr:postcode": "2513AM",
+    "addr:street": "Rond de Grote Kerk",
+    "amenity": "restaurant",
+    "cuisine": "international",
+    "delivery": "no",
+    "description": "Lunch, diner, koffie.",
+    "diet:gluten_free": "yes",
+    "diet:vegan": "yes",
+    "diet:vegetarian": "yes",
+    "name": "Restaurant Zebedeus",
+    "opening_hours": "11:00-21:30",
+    "phone": "+31 70 346 8393",
+    "smoking": "outside",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "takeaway": "no",
+    "website": "https://www.zebedeus.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 757453102,
+  "lat": 52.0719324,
+  "lon": 4.3016221,
+  "tags": {
+    "amenity": "school",
+    "name": "Prinsehaghe",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 792621127,
+  "lat": 52.0754869,
+  "lon": 4.3097155,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "5-7",
+    "addr:postcode": "2511BH",
+    "addr:street": "Grote Marktstraat",
+    "brand": "Albert Heijn",
+    "brand:wikidata": "Q1653985",
+    "brand:wikipedia": "nl:Albert Heijn (supermarkt)",
+    "name": "Albert Heijn",
+    "opening_hours": "Mo-Sa 08:00-22:00; Su 09:00-22:00",
+    "phone": "+31 70 360 4042",
+    "ref": "1503",
+    "shop": "supermarket",
+    "website": "https://www.ah.nl/winkel/1503"
+  }
+},
+{
+  "type": "node",
+  "id": 885825966,
+  "lat": 52.0843273,
+  "lon": 4.3037838,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "35",
+    "addr:postcode": "2518AA",
+    "addr:street": "Zeestraat",
+    "brand": "Hilton",
+    "brand:wikidata": "Q598884",
+    "brand:wikipedia": "nl:Hilton Hotels & Resorts",
+    "contact:facebook": "https://www.facebook.com/HiltonTheHague",
+    "contact:twitter": "https://twitter.com/HiltonTheHague",
+    "email": "reservations.thehague@hilton.com",
+    "name": "Hilton The Hague",
+    "operator": "Hilton Worldwide",
+    "phone": "+31 70 710 7000",
+    "source": "BAG",
+    "source:date": "2014-02-11",
+    "tourism": "hotel",
+    "website": "https://www.hilton.com/en/hotels/amshhhi-hilton-the-hague/",
+    "wheelchair": "yes",
+    "wikidata": "Q2899830",
+    "wikimedia_commons": "Category:Hilton The Hague"
+  }
+},
+{
+  "type": "node",
+  "id": 922759280,
+  "lat": 52.0824164,
+  "lon": 4.3055261,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:country": "NL",
+    "addr:housenumber": "140C",
+    "addr:postcode": "2514GP",
+    "addr:street": "Noordeinde",
+    "amenity": "restaurant",
+    "check_date": "2023-05-14",
+    "name": "De Salon van Fagel",
+    "source": "BAG",
+    "source:date": "2017-11-08"
+  }
+},
+{
+  "type": "node",
+  "id": 922762096,
+  "lat": 52.0823014,
+  "lon": 4.3056583,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:country": "NL",
+    "addr:housenumber": "138B",
+    "addr:postcode": "2514GP",
+    "addr:street": "Noordeinde",
+    "amenity": "cafe",
+    "cuisine": "sandwich",
+    "name": "Soiso",
+    "phone": "+31 70 363 3120",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 925780779,
+  "lat": 52.0825076,
+  "lon": 4.3054260,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:country": "NL",
+    "addr:housenumber": "142-144",
+    "addr:postcode": "2514GP",
+    "addr:street": "Noordeinde",
+    "amenity": "restaurant",
+    "cuisine": "greek",
+    "email": "info@restauratelea.nl",
+    "name": "Restaurant Elea",
+    "opening_hours": "Mo,Th-Su 18:30+; Sa-Su 12:30-16:00",
+    "phone": "+31 70 214 3860",
+    "reservation": "yes",
+    "toilets:access": "customers",
+    "website": "https://restaurantelea.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 928640180,
+  "lat": 52.0816567,
+  "lon": 4.3216757,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Geldmaat",
+    "brand:wikidata": "Q74051230",
+    "brand:wikipedia": "nl:Geldmaat",
+    "cash_in": "yes",
+    "cash_out": "yes",
+    "check_date": "2025-03-18",
+    "currency:EUR": "yes",
+    "drive_through": "no",
+    "indoor": "no",
+    "name": "Geldmaat",
+    "network": "Geldmaat",
+    "opening_hours": "24/7",
+    "operator": "Geldmaat",
+    "operator:wikidata": "Q74051230",
+    "operator:wikipedia": "nl:Geldmaat",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 929117947,
+  "lat": 52.0881837,
+  "lon": 4.3101266,
+  "tags": {
+    "amenity": "atm",
+    "cash_in": "no",
+    "check_date": "2025-03-28",
+    "indoor": "no",
+    "opening_hours": "24/7",
+    "operator": "In2Retail",
+    "operator:website": "https://in2retail.nl/nl/",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 929118201,
+  "lat": 52.0887031,
+  "lon": 4.3097091,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Peppermint",
+    "source": "survey",
+    "survey:date": "2021-03-18"
+  }
+},
+{
+  "type": "node",
+  "id": 929122659,
+  "lat": 52.0885581,
+  "lon": 4.3072414,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "italian",
+    "name": "Sapori D'Italia"
+  }
+},
+{
+  "type": "node",
+  "id": 1159386483,
+  "lat": 52.0783146,
+  "lon": 4.3178315,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Geldmaat",
+    "brand:wikidata": "Q74051230",
+    "cash_in": "no",
+    "indoor": "yes",
+    "note": "inside Stadhuis",
+    "opening_hours:signed": "no",
+    "operator": "Geldmaat",
+    "operator:wikidata": "Q74051230",
+    "source": "note #3701183;survey"
+  }
+},
+{
+  "type": "node",
+  "id": 1294703986,
+  "lat": 52.0881204,
+  "lon": 4.3099014,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "62",
+    "addr:street": "Frederikstraat",
+    "amenity": "restaurant",
+    "cuisine": "italian",
+    "name": "Follia",
+    "source": "survey",
+    "survey:date": "2021-03-18",
+    "website": "https://www.follia.nl"
+  }
+},
+{
+  "type": "node",
+  "id": 1343467992,
+  "lat": 52.0759154,
+  "lon": 4.3073400,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Geldmaat",
+    "brand:wikidata": "Q74051230",
+    "brand:wikipedia": "nl:Geldmaat",
+    "cash_in": "no",
+    "check_date": "2025-03-11",
+    "currency:EUR": "yes",
+    "name": "Geldmaat",
+    "operator": "Geldmaat",
+    "operator:wikidata": "Q74051230",
+    "operator:wikipedia": "nl:Geldmaat"
+  }
+},
+{
+  "type": "node",
+  "id": 1343468000,
+  "lat": 52.0766433,
+  "lon": 4.3141358,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Geldmaat",
+    "brand:wikidata": "Q74051230",
+    "description": "Houd er rekening mee dat deze Geldmaat gedemonteerd zal worden. Er is geen datum genoemd.",
+    "indoor": "no",
+    "opening_hours": "24/7",
+    "operator": "Geldmaat",
+    "operator:wikidata": "Q74051230",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 1343468001,
+  "lat": 52.0767698,
+  "lon": 4.3110389,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "6;8",
+    "addr:postcode": "2512AX",
+    "addr:street": "Wagenstraat",
+    "amenity": "atm",
+    "brand": "Geldmaat",
+    "brand:wikidata": "Q74051230",
+    "cash_in": "yes",
+    "indoor": "no",
+    "name": "Geldmaat",
+    "operator": "Geldmaat",
+    "operator:wikidata": "Q74051230"
+  }
+},
+{
+  "type": "node",
+  "id": 1399292223,
+  "lat": 52.0791222,
+  "lon": 4.3044736,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "korean",
+    "name": "Kimchi House",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 1426083739,
+  "lat": 52.0803312,
+  "lon": 4.3252025,
+  "tags": {
+    "amenity": "bus_station",
+    "bus": "yes",
+    "name": "Den Haag Centraal",
+    "public_transport": "station",
+    "zone": "5400"
+  }
+},
+{
+  "type": "node",
+  "id": 1451083851,
+  "lat": 52.0882205,
+  "lon": 4.3098136,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "66",
+    "addr:postcode": "2514LL",
+    "addr:street": "Frederikstraat",
+    "amenity": "cafe",
+    "name": "Barista Cafe",
+    "source": "survey",
+    "survey:date": "2021-03-18"
+  }
+},
+{
+  "type": "node",
+  "id": 1515025808,
+  "lat": 52.0785650,
+  "lon": 4.3064616,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "13",
+    "addr:postcode": "2513CA",
+    "addr:street": "Prinsestraat",
+    "amenity": "restaurant",
+    "cuisine": "sushi",
+    "name": "Dozo",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "website": "https://restaurantdozo.nl"
+  }
+},
+{
+  "type": "node",
+  "id": 1515026981,
+  "lat": 52.0783347,
+  "lon": 4.3058947,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "13",
+    "addr:postcode": "2513BC",
+    "addr:street": "Nobelstraat",
+    "amenity": "restaurant",
+    "cuisine": "italian",
+    "name": "il Senso",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "website": "https://www.il-senso.nl/"
+  }
+},
+{
+  "type": "node",
+  "id": 1517906751,
+  "lat": 52.0748542,
+  "lon": 4.3001634,
+  "tags": {
+    "amenity": "pharmacy",
+    "dispensing": "yes",
+    "healthcare": "pharmacy",
+    "layer": "2",
+    "name": "Boots"
+  }
+},
+{
+  "type": "node",
+  "id": 1525256407,
+  "lat": 52.0775391,
+  "lon": 4.3172552,
+  "tags": {
+    "access": "key",
+    "amenity": "toilets",
+    "changing_table": "yes",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 1525256430,
+  "lat": 52.0782189,
+  "lon": 4.3176166,
+  "tags": {
+    "access": "yes",
+    "amenity": "toilets",
+    "check_date": "2024-05-02",
+    "fee": "no",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 1526018555,
+  "lat": 52.0798540,
+  "lon": 4.3023135,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:country": "NL",
+    "addr:housenumber": "17",
+    "addr:postcode": "2513EG",
+    "addr:street": "Veenkade",
+    "amenity": "cafe",
+    "name": "Moments",
+    "source": "BAG",
+    "source:date": "2014-02-11"
+  }
+},
+{
+  "type": "node",
+  "id": 1526044787,
+  "lat": 52.0782967,
+  "lon": 4.3057041,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "19",
+    "addr:postcode": "2513BC",
+    "addr:street": "Nobelstraat",
+    "amenity": "restaurant",
+    "cuisine": "thai",
+    "name": "Khaosaan Road",
+    "source": "BAG",
+    "source:date": "2017-11-08"
+  }
+},
+{
+  "type": "node",
+  "id": 1526046767,
+  "lat": 52.0784549,
+  "lon": 4.3062881,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "12",
+    "addr:postcode": "2513CD",
+    "addr:street": "Prinsestraat",
+    "amenity": "restaurant",
+    "name": "Vincenzo's",
+    "source": "BAG",
+    "source:date": "2017-11-08"
+  }
+},
+{
+  "type": "node",
+  "id": 1770256924,
+  "lat": 52.0790249,
+  "lon": 4.3302006,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "102",
+    "addr:postcode": "2595WX",
+    "addr:street": "Jan van Riebeekstraat",
+    "name": "Thuismarkt",
+    "shop": "convenience"
+  }
+},
+{
+  "type": "node",
+  "id": 1803286499,
+  "lat": 52.0816172,
+  "lon": 4.3244095,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "63",
+    "addr:postcode": "2595AA",
+    "addr:street": "Koningin Julianaplein",
+    "brand": "Albert Heijn to go",
+    "brand:wikidata": "Q77971185",
+    "brand:wikipedia": "en:Albert Heijn",
+    "name": "Albert Heijn to go",
+    "official_name": "AH to go",
+    "opening_hours": "Mo-Fr 06:00-23:45; Sa 07:00-23:45; Su 08:00-23:45",
+    "shop": "convenience",
+    "source": "BAG",
+    "source:date": "2017-11-08",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1803286500,
+  "lat": 52.0789229,
+  "lon": 4.3207167,
+  "tags": {
+    "addr:city": "'s-Gravenhage",
+    "addr:housenumber": "103",
+    "addr:postcode": "2511DP",
+    "addr:street": "Turfmarkt",
+    "brand": "Albert Heijn",
+    "brand:website": "https://www.ah.nl/",
+    "brand:wikidata": "Q1653985",
+    "brand:wikipedia": "nl:Albert Heijn (supermarkt)",
+    "name": "Albert Heijn",
+    "opening_hours": "Mo-Fr 07:00-22:00; Sa 08:00-22:00; Su 09:00-21:00",
+    "shop": "supermarket",
+    "source": "BAG",
+    "source:date": "2014-02-11",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1844455668,
+  "lat": 52.0796028,
+  "lon": 4.3053464,
+  "tags": {
+    "email": "info@parkhoteldenhaag.nl",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "Parkhotel Den Haag",
+    "phone": "+31 70 362 4371",
+    "stars": "4",
+    "toilets:wheelchair": "no",
+    "tourism": "hotel",
+    "website": "https://www.parkhoteldenhaag.nl/",
+    "wheelchair": "no"
+  }
+}
+
+  ]
+}

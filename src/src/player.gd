@@ -24,24 +24,30 @@ var max_pitch: float    = 2.0      # Highest pitch
 #const footstep_grass = preload("res://sounds/footsteps/footstep_grass.wav")
 #const footstep_concrete = preload("res://sounds/footsteps/footstep_concrete.wav")
 
+var _movement_enabled: bool = true
+
+func set_movement_enabled(enabled: bool):
+	_movement_enabled = enabled
+
 func _input(event):
 	if event is InputEventKey:
-		if event.pressed and event.keycode == KEY_SHIFT:
-			if not distance_audio.playing: # Prevent re-triggering
-				distance_audio.play()
-		elif not event.pressed and event.keycode == KEY_SHIFT:
-			distance_audio.stop()  # Stop when Shift is released
-		if event.pressed and event.keycode == KEY_E:
-			speak('Road on the right.')
-		if event.pressed and event.keycode == KEY_Q:
-			speak('Building on the left.')
-		if event.pressed and event.keycode == KEY_TAB:
-			if currentTarget == target:
-				currentTarget = target2
-				speak('To the Fountain')
-			else:
-				currentTarget = target
-				speak('To the elevator')
+		if _movement_enabled:
+			if event.pressed and event.keycode == KEY_SHIFT:
+				if not distance_audio.playing: # Prevent re-triggering
+					distance_audio.play()
+			elif not event.pressed and event.keycode == KEY_SHIFT:
+				distance_audio.stop()  # Stop when Shift is released
+			if event.pressed and event.keycode == KEY_E:
+				speak('Road on the right.')
+			if event.pressed and event.keycode == KEY_Q:
+				speak('Building on the left.')
+			if event.pressed and event.keycode == KEY_TAB:
+				if currentTarget == target:
+					currentTarget = target2
+					speak('To the Fountain')
+				else:
+					currentTarget = target
+					speak('To the elevator')
 
 
 func _process(delta):
@@ -77,10 +83,13 @@ func speak(text, lang = "en-US"):
 
 
 func _ready():
-	speak(" Hello ! Walk through the space to find the elevator or the fountain. Hold the shift key to hear the approximate distance. Press Tab to switch target.")
+	pass
+	#speak(" Hello ! Walk through the space to find the elevator or the fountain. Hold the shift key to hear the approximate distance. Press Tab to switch target.")
 
 
 func _physics_process(delta):
+	if not _movement_enabled:
+		return
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction =  (neck.transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 

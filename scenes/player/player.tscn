@@ -1,0 +1,36 @@
+[gd_scene load_steps=6 format=3 uid="uid://banloe8guvh8w"]
+
+[ext_resource type="Script" path="res://scripts/player/player.gd" id="1_q2squ"]
+[ext_resource type="AudioStream" uid="uid://dcr771npvhtkv" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
+[ext_resource type="AudioStream" uid="uid://xctggq66f0gk" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1beah"]
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_q2squ")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.761815, 0)
+visible = false
+mesh = SubResource("CapsuleMesh_cpk1c")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 1, 0)
+shape = SubResource("BoxShape3D_1beah")
+
+[node name="Neck" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.539442, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Neck"]
+
+[node name="distance_stream" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_vqdj0")
+
+[node name="footstep" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_thov6")
+volume_db = -20.215
+
+[node name="Timer" type="Timer" parent="."]
+one_shot = true 

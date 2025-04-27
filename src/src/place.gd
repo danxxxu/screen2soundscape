@@ -1,7 +1,28 @@
 extends Node3D
 class_name Place
 const PlaceData = preload("res://src/models/Place.gd")
-@export var place_data: PlaceData
+
+var place_data = null
+var mesh_instance: MeshInstance3D
+var audio_player: AudioStreamPlayer3D
+var area: Area3D
+var label: Label3D
+
+func _ready():
+	mesh_instance = $MeshInstance3D
+	audio_player = $AudioStreamPlayer3D
+	area = $Area3D
+	label = $MeshInstance3D/Label3D
+	
+	# Connect area signals to scene
+	var scene = get_tree().get_root().get_node("Scene")
+	if scene:
+		area.body_entered.connect(func(body): 
+			if body.name == "Player":
+				scene._on_place_entered(self))
+		area.body_exited.connect(func(body): 
+			if body.name == "Player":
+				scene._on_place_exited(self))
 
 func set_place_data(data: PlaceData):
 	if not data:
@@ -11,26 +32,34 @@ func set_place_data(data: PlaceData):
 	place_data = data
 
 	# Assign mesh
-	var mesh_instance = $MeshInstance3D
 	if place_data.mesh:
 		var mesh_scene = place_data.mesh.instantiate()
-		mesh_instance.add_child(mesh_scene)
+		if mesh_scene.get_node("MeshInstance3D"):
+			mesh_instance.mesh = mesh_scene.get_node("MeshInstance3D").mesh
 
 	# Assign sound
-	var audio_player = $AudioStreamPlayer3D
 	if place_data.sound:
 		audio_player.stream = place_data.sound
 
 	# Set the text label
-	var text_label = $MeshInstance3D/Label3D  # Adjust path if needed
-	if text_label:
-		text_label.text = place_data.name  # Set name
-		text_label.position.y = 2.0  # Adjust height above the cube
+	if label:
+		label.text = place_data.name
+		label.position.y = 2.0  # Position above the mesh
+		# Add type if it's not "unknown"
+		if place_data.type != "unknown":
+			label.text += "\n(" + place_data.type + ")"
+		# Add address if available
+		if place_data.tags and place_data.tags.has("addr:street"):
+			var address = place_data.tags["addr:street"]
+			if place_data.tags.has("addr:housenumber"):
+				address += " " + place_data.tags["addr:housenumber"]
+			label.text += "\n" + address
 
 	print("✅ Place:", place_data.name, "Type:", place_data.type)
+	if place_data.tags:
+		print("📍 Tags:", place_data.tags)
 
-
-func speak(text, lang = "en-US"):
+func speak(text: String, lang: String = "en-US"):
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("""
 			(function() {
@@ -41,10 +70,26 @@ func speak(text, lang = "en-US"):
 			})();
 		""" % [text, lang])
 	else:
-		DisplayServer.tts_speak(text, "en")
+		DisplayServer.tts_speak(text, "default", 100, 1.0, 1.0)
 
+func _on_area_3d_body_entered(body):
+	if body.name == "Player" and place_data:
+		# Announce place name and type
+		var announcement = place_data.name
+		if place_data.type != "unknown":
+			announcement += ", " + place_data.type
+			
+		# Add address if available
+		if place_data.tags and place_data.tags.has("addr:street"):
+			announcement += ", on " + place_data.tags["addr:street"]
+			if place_data.tags.has("addr:housenumber"):
+				announcement += " " + place_data.tags["addr:housenumber"]
+				
+		speak(announcement)
+		if audio_player.stream:
+			audio_player.play()
 
-
-func _on_area_3d_body_shape_entered(body_rid: RID, body: Node3D, body_shape_index: int, local_shape_index: int) -> void:
-	if body.name =='Player':
-		speak(place_data.name)
+func _on_area_3d_body_exited(body):
+	if body.name == "Player":
+		if audio_player.playing:
+			audio_player.stop()
