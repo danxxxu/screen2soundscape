@@ -1,8 +1,8 @@
 [gd_scene load_steps=6 format=3 uid="uid://banloe8guvh8w"]
 
-[ext_resource type="Script" path="res://player.gd" id="1_q2squ"]
-[ext_resource type="AudioStream" uid="uid://dcr771npvhtkv" path="res://sounds/100bpmsmoothvibe.wav" id="2_vqdj0"]
-[ext_resource type="AudioStream" uid="uid://xctggq66f0gk" path="res://sounds/footsteps/footstep_grass.wav" id="3_thov6"]
+[ext_resource type="Script" path="res://src/player.gd" id="1_q2squ"]
+[ext_resource type="AudioStream" uid="uid://dcr771npvhtkv" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
+[ext_resource type="AudioStream" uid="uid://xctggq66f0gk" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 

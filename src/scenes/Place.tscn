@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://dmgx0nukb1l5j"]
 
-[ext_resource type="Script" path="res://place.gd" id="1_bbic8"]
+[ext_resource type="Script" path="res://src/place.gd" id="1_bbic8"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_2as7n"]
 
