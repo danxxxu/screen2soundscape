@@ -1,11 +1,13 @@
-[gd_scene load_steps=15 format=3 uid="uid://cwrxsfnvowad6"]
+[gd_scene load_steps=19 format=3 uid="uid://cwrxsfnvowad6"]
 
 [ext_resource type="AudioStream" uid="uid://cxknm8bnxqwaq" path="res://ambient-noise-236388.mp3" id="1_cy7eh"]
-[ext_resource type="Script" path="res://scene.gd" id="1_ojrou"]
+[ext_resource type="Script" uid="uid://dk83120yjrcuu" path="res://scene.gd" id="1_ojrou"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://player.tscn" id="2_lveax"]
 [ext_resource type="Texture2D" uid="uid://bt306djatc6mm" path="res://rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
 [ext_resource type="AudioStream" uid="uid://bga2g1cd2x5a0" path="res://Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://di6s6u00ob1uy" path="res://mixkit-rain-loop-1250.wav" id="4_u6vwu"]
+[ext_resource type="PackedScene" uid="uid://mt45b7jokkm0" path="res://SpatialAudioPlayer3D.tscn" id="7_ni31j"]
+[ext_resource type="AudioStream" uid="uid://b118ickmt6k6g" path="res://sounds/backdoor.mp3" id="8_xlvrw"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -34,6 +36,11 @@ uv2_scale = Vector3(60, 60, 60)
 size = Vector3(1000, 1, 1000)
 
 [sub_resource type="BoxMesh" id="BoxMesh_jkbgw"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xlvrw"]
+albedo_color = Color(1, 0.505882, 1, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_xlvrw"]
 
 [node name="Scene" type="Node3D"]
 script = ExtResource("1_ojrou")
@@ -72,6 +79,7 @@ mesh = SubResource("PlaneMesh_xluca")
 surface_material_override/0 = SubResource("StandardMaterial3D_i7ydk")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="Floor"]
+collision_layer = 9
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor/StaticBody3D"]
 shape = SubResource("BoxShape3D_a6j3j")
@@ -100,3 +108,32 @@ transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("4_u6vwu")
 volume_db = -15.89
 autoplay = true
+
+[node name="CSGBox3D" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.62614, 1.14056, 0)
+use_collision = true
+collision_layer = 9
+size = Vector3(15, 10, 0.5)
+material = SubResource("StandardMaterial3D_xlvrw")
+
+[node name="CSGBox3D2" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.67402, 1.1269, 0)
+use_collision = true
+collision_layer = 9
+size = Vector3(0.5, 10, 20)
+
+[node name="CSGBox3D3" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.49176, 6.56664, -0.438971)
+use_collision = true
+collision_layer = 9
+size = Vector3(10, 1, 20)
+
+[node name="SpatialAudioPlayer3d" parent="." instance=ExtResource("7_ni31j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.931569, 0.0918117, 2.92087)
+stream = ExtResource("8_xlvrw")
+volume_db = -14.477
+autoplay = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SpatialAudioPlayer3d"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.70025, 0)
+mesh = SubResource("CapsuleMesh_xlvrw")
