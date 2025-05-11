@@ -1,0 +1,7 @@
+[out:json][timeout:25];
+
+// Rough bounding box around Den Haag center
+way["building"](52.076, 4.305, 52.083, 4.318);
+out body;
+>;
+out skel qt;
