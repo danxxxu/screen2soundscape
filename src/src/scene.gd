@@ -1,7 +1,7 @@
 extends Node3D
 "res://rocky_terrain_02_diff_4k.jpg"
 const PlaceData = preload("res://src/models/Place.gd")
-@export var map_size: Vector3 = Vector3(200, 0, 200) # Define the map size
+@export var map_size: Vector3 = Vector3(1000, 0, 1000) # Map size in local units
 @export var place_meshes: Array[PackedScene] # Assign random meshes in the editor
 @export var place_sounds: Array[AudioStream] # Assign random sounds in the editor
 
@@ -52,7 +52,7 @@ func load_places_from_json() -> void:
 					place.type = element["tags"].get("amenity", element["tags"].get("shop", "unknown"))
 					
 					# Convert coordinates
-					var local_coords = convert_to_local_coords(element["lat"], element["lon"])
+					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
 					place.x = local_coords.x
 					place.z = local_coords.y
 					

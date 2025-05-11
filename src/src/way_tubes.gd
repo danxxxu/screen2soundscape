@@ -3,12 +3,6 @@ extends Node3D
 
 const TUBE_WIDTH = 1.0
 const TUBE_HEIGHT = 1
-const GRID_STEP = 10.0
-
-@export var map_size: Vector3 = Vector3(200, 0, 200) # Define the map size
-@export var center_lat: float = 52.0785266  # Center latitude (Dudok cafe as center point)
-@export var center_lon: float = 4.3117263   # Center longitude
-@export var scale_factor: float = 1000.0    # Scale factor to convert degrees to local units
 
 var way_data = {}
 var node_data = {}  # Store node coordinates
@@ -51,24 +45,6 @@ func load_ways():
 	else:
 		print("Failed to open ways.json")
 
-# Convert lat/lon to local coordinates (same as in scene.gd)
-func convert_to_local_coords(lat: float, lon: float) -> Vector2:
-	# Calculate difference from center point
-	var lat_diff = lat - center_lat
-	var lon_diff = lon - center_lon
-	
-	# Convert to local coordinates
-	# We multiply by scale_factor to convert tiny degree differences to meaningful distances
-	# Note: cos(center_lat) accounts for longitude distortion at different latitudes
-	var x = lon_diff * cos(deg_to_rad(center_lat)) * scale_factor
-	var z = lat_diff * scale_factor
-	
-	# Scale to map bounds
-	x = clamp(x * map_size.x, -map_size.x / 2, map_size.x / 2)
-	z = clamp(z * map_size.z, -map_size.z / 2, map_size.z / 2)
-	
-	return Vector2(x, z)
-
 func create_materials():
 	# Tube material
 	tube_material = StandardMaterial3D.new()
@@ -86,9 +62,9 @@ func create_grid():
 	var mesh = PlaneMesh.new()
 	
 	# Set grid size based on map_size
-	mesh.size = Vector2(map_size.x, map_size.z)
-	mesh.subdivide_width = map_size.x / GRID_STEP
-	mesh.subdivide_depth = map_size.z / GRID_STEP
+	mesh.size = Vector2(MapUtils.MAP_SIZE.x, MapUtils.MAP_SIZE.z)
+	mesh.subdivide_width = MapUtils.MAP_SIZE.x / MapUtils.GRID_STEP
+	mesh.subdivide_depth = MapUtils.MAP_SIZE.z / MapUtils.GRID_STEP
 	
 	grid.mesh = mesh
 	grid.material_override = grid_material
@@ -116,17 +92,16 @@ func create_coordinate_labels():
 	add_child(label_container)
 	
 	# Calculate grid bounds based on map_size
-	var half_width = map_size.x / 2
-	var half_depth = map_size.z / 2
+	var half_width = MapUtils.MAP_SIZE.x / 2
+	var half_depth = MapUtils.MAP_SIZE.z / 2
 	
 	# Create labels for all grid intersections
-	for x in range(-int(half_width), int(half_width) + 1, int(GRID_STEP)):
-		for z in range(-int(half_depth), int(half_depth) + 1, int(GRID_STEP)):
-			var lat = center_lat + (z / scale_factor)
-			var lon = center_lon + (x / scale_factor)
-			
-			var lat_str = format_coordinate(lat, true)
-			var lon_str = format_coordinate(lon, false)
+	for x in range(-int(half_width), int(half_width) + 1, int(MapUtils.GRID_STEP * 2)):  # Double the step for labels
+		for z in range(-int(half_depth), int(half_depth) + 1, int(MapUtils.GRID_STEP * 2)):
+			# Flip Z coordinate to match the coordinate system
+			var geo_coords = MapUtils.convert_to_geo_coords(x, -z)
+			var lat_str = format_coordinate(geo_coords.x, true)
+			var lon_str = format_coordinate(geo_coords.y, false)
 			var label_text = "(%s, %s)" % [lat_str, lon_str]
 			
 			create_label(Vector3(x, 0.1, z), label_text, label_container)
@@ -152,8 +127,9 @@ func create_tube_for_way(way):
 	for node_id in way.nodes:
 		if node_data.has(node_id):
 			var node = node_data[node_id]
-			var local_coords = convert_to_local_coords(node.lat, node.lon)
-			points.append(Vector3(local_coords.x, 0, local_coords.y))
+			var local_coords = MapUtils.convert_to_local_coords(node.lat, node.lon)
+			# Flip Z coordinate to match the coordinate system
+			points.append(Vector3(local_coords.x, 0, -local_coords.y))
 	
 	if points.size() < 2:
 		return
