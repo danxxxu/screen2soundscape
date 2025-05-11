@@ -12,7 +12,7 @@ const CENTER_LAT = 52.0785266
 const CENTER_LON = 4.3117263
 
 # Scale factor to convert degrees to local units
-const SCALE_FACTOR = 30
+const SCALE_FACTOR = 100
 
 # Convert lat/lon to local coordinates
 static func convert_to_local_coords(lat: float, lon: float) -> Vector2:

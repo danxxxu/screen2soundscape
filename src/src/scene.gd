@@ -54,7 +54,7 @@ func load_places_from_json() -> void:
 					# Convert coordinates
 					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
 					place.x = local_coords.x
-					place.z = local_coords.y
+					place.z = -local_coords.y
 					
 					# Assign random mesh and sound
 					if place_meshes.size() > 0:

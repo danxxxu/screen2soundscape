@@ -99,7 +99,7 @@ func create_lines():
 				if node_data.has(node_id):
 					var node = node_data[node_id]
 					var local_coords = MapUtils.convert_to_local_coords(node.lat, node.lon)
-					st.add_vertex(Vector3(local_coords.x, 0.1, local_coords.y))  # Slightly above ground
+					st.add_vertex(Vector3(local_coords.x, 0.1, -local_coords.y))
 			
 			# Create the mesh
 			line.mesh = st.commit()
@@ -126,8 +126,7 @@ func create_coordinate_labels():
 	# Create labels for all grid intersections
 	for x in range(-int(half_width), int(half_width) + 1, int(MapUtils.GRID_STEP * 2)):  # Double the step for labels
 		for z in range(-int(half_depth), int(half_depth) + 1, int(MapUtils.GRID_STEP * 2)):
-			# Flip Z coordinate to match the coordinate system
-			var geo_coords = MapUtils.convert_to_geo_coords(x, -z)
+			var geo_coords = MapUtils.convert_to_geo_coords(x, z)  # Removed z-flip
 			var lat_str = format_coordinate(geo_coords.x, true)
 			var lon_str = format_coordinate(geo_coords.y, false)
 			var label_text = "(%s, %s)" % [lat_str, lon_str]
