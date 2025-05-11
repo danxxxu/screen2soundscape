@@ -1,0 +1,461 @@
+{
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.5 1bd436f1",
+    "osm3s": {
+      "timestamp_osm_base": "2025-05-11T11:34:15Z",
+      "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+  
+  {
+    "type": "way",
+    "id": 46188643,
+    "nodes": [
+      45148355,
+      45148781,
+      45149275,
+      491613261,
+      442717495,
+      491613265,
+      45150859,
+      12416482235,
+      6128456230
+    ],
+    "tags": {
+      "cycleway:right": "lane",
+      "highway": "residential",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "type": "way",
+    "id": 85866167,
+    "nodes": [
+      568098155,
+      6293883185,
+      996796654,
+      45147850,
+      45147868,
+      632873967,
+      45147443
+    ],
+    "tags": {
+      "bicycle": "yes",
+      "goods": "private",
+      "highway": "pedestrian",
+      "lit": "yes",
+      "motorcar": "private",
+      "motorcycle": "private",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "surface": "paving_stones"
+    }
+  },
+  {
+    "type": "way",
+    "id": 85866170,
+    "nodes": [
+      45147970,
+      442717496,
+      632873966,
+      568098156,
+      996659108,
+      45148355
+    ],
+    "tags": {
+      "bicycle": "yes",
+      "goods": "private",
+      "highway": "pedestrian",
+      "lit": "yes",
+      "motorcar": "private",
+      "motorcycle": "private",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "surface": "paving_stones"
+    }
+  },
+  {
+    "type": "way",
+    "id": 85877641,
+    "nodes": [
+      45149251,
+      491613259,
+      45148323,
+      6293882684,
+      45147915,
+      568098155
+    ],
+    "tags": {
+      "cycleway:right": "lane",
+      "highway": "residential",
+      "lanes": "1",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "sidewalk": "right",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "type": "way",
+    "id": 474589549,
+    "nodes": [
+      45151031,
+      12416482236,
+      45150858,
+      45149251
+    ],
+    "tags": {
+      "cycleway:right": "lane",
+      "highway": "residential",
+      "lanes": "1",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "sidewalk": "right",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "type": "way",
+    "id": 672110378,
+    "nodes": [
+      1435019570,
+      2132346641,
+      45148355
+    ],
+    "tags": {
+      "cycleway:right": "lane",
+      "highway": "residential",
+      "lane_markings": "no",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "type": "way",
+    "id": 672110379,
+    "nodes": [
+      568098155,
+      2132346623,
+      1435019570
+    ],
+    "tags": {
+      "cycleway:right": "lane",
+      "highway": "residential",
+      "lanes": "1",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "surface": "paving_stones"
+    }
+  },
+  {
+    "type": "way",
+    "id": 672110381,
+    "nodes": [
+      1435019570,
+      6293882680,
+      6293882679,
+      6293882678,
+      6293882677,
+      6293882676,
+      6293882675,
+      6293882674,
+      6293882673
+    ],
+    "tags": {
+      "embedded_rails": "tram",
+      "highway": "busway",
+      "lanes": "2",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "zone:traffic": "NL:urban"
+    }
+  },
+  {
+    "type": "way",
+    "id": 743633616,
+    "nodes": [
+      6128456230,
+      632863772
+    ],
+    "tags": {
+      "cycleway:right": "lane",
+      "highway": "residential",
+      "lanes": "1",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "Hofweg",
+      "oneway": "yes",
+      "psv": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "type": "node",
+    "id": 45147915,
+    "lat": 52.0784638,
+    "lon": 4.3122029
+  },
+  {
+    "type": "node",
+    "id": 45148323,
+    "lat": 52.0784896,
+    "lon": 4.3121097
+  },
+  {
+    "type": "node",
+    "id": 45149251,
+    "lat": 52.0787860,
+    "lon": 4.3117186
+  },
+  {
+    "type": "node",
+    "id": 45150858,
+    "lat": 52.0788692,
+    "lon": 4.3116134
+  },
+  {
+    "type": "node",
+    "id": 45150859,
+    "lat": 52.0790078,
+    "lon": 4.3117115
+  },
+  {
+    "type": "node",
+    "id": 45151031,
+    "lat": 52.0789897,
+    "lon": 4.3114091
+  },
+  {
+    "type": "node",
+    "id": 442717495,
+    "lat": 52.0787979,
+    "lon": 4.3120025
+  },
+  {
+    "type": "node",
+    "id": 491613259,
+    "lat": 52.0786060,
+    "lon": 4.3119531
+  },
+  {
+    "type": "node",
+    "id": 491613261,
+    "lat": 52.0786610,
+    "lon": 4.3121653
+  },
+  {
+    "type": "node",
+    "id": 491613265,
+    "lat": 52.0789188,
+    "lon": 4.3118481
+  },
+  {
+    "type": "node",
+    "id": 568098155,
+    "lat": 52.0784745,
+    "lon": 4.3122358
+  },
+  {
+    "type": "node",
+    "id": 632863772,
+    "lat": 52.0791601,
+    "lon": 4.3112730
+  },
+  {
+    "type": "node",
+    "id": 6128456230,
+    "lat": 52.0790840,
+    "lon": 4.3115431
+  },
+  {
+    "type": "node",
+    "id": 6293882684,
+    "lat": 52.0784688,
+    "lon": 4.3121656
+  },
+  {
+    "type": "node",
+    "id": 12416482235,
+    "lat": 52.0790414,
+    "lon": 4.3116372
+  },
+  {
+    "type": "node",
+    "id": 12416482236,
+    "lat": 52.0789158,
+    "lon": 4.3115343
+  },
+  {
+    "type": "node",
+    "id": 45147443,
+    "lat": 52.0783188,
+    "lon": 4.3136548
+  },
+  {
+    "type": "node",
+    "id": 45147850,
+    "lat": 52.0783986,
+    "lon": 4.3129052
+  },
+  {
+    "type": "node",
+    "id": 45147868,
+    "lat": 52.0783888,
+    "lon": 4.3131996
+  },
+  {
+    "type": "node",
+    "id": 45147970,
+    "lat": 52.0784084,
+    "lon": 4.3138078
+  },
+  {
+    "type": "node",
+    "id": 45148355,
+    "lat": 52.0785532,
+    "lon": 4.3123336
+  },
+  {
+    "type": "node",
+    "id": 45148781,
+    "lat": 52.0785706,
+    "lon": 4.3123093
+  },
+  {
+    "type": "node",
+    "id": 45149275,
+    "lat": 52.0785908,
+    "lon": 4.3122806
+  },
+  {
+    "type": "node",
+    "id": 442717496,
+    "lat": 52.0784692,
+    "lon": 4.3135392
+  },
+  {
+    "type": "node",
+    "id": 568098156,
+    "lat": 52.0784946,
+    "lon": 4.3129614
+  },
+  {
+    "type": "node",
+    "id": 632873966,
+    "lat": 52.0784904,
+    "lon": 4.3132779
+  },
+  {
+    "type": "node",
+    "id": 632873967,
+    "lat": 52.0783704,
+    "lon": 4.3134216
+  },
+  {
+    "type": "node",
+    "id": 996659108,
+    "lat": 52.0785047,
+    "lon": 4.3126021
+  },
+  {
+    "type": "node",
+    "id": 996796654,
+    "lat": 52.0784039,
+    "lon": 4.3126329
+  },
+  {
+    "type": "node",
+    "id": 1435019570,
+    "lat": 52.0785125,
+    "lon": 4.3123104
+  },
+  {
+    "type": "node",
+    "id": 2132346623,
+    "lat": 52.0784963,
+    "lon": 4.3122970
+  },
+  {
+    "type": "node",
+    "id": 2132346641,
+    "lat": 52.0785276,
+    "lon": 4.3123184
+  },
+  {
+    "type": "node",
+    "id": 6293882673,
+    "lat": 52.0783620,
+    "lon": 4.3137126
+  },
+  {
+    "type": "node",
+    "id": 6293882674,
+    "lat": 52.0783989,
+    "lon": 4.3136111
+  },
+  {
+    "type": "node",
+    "id": 6293882675,
+    "lat": 52.0784160,
+    "lon": 4.3135206
+  },
+  {
+    "type": "node",
+    "id": 6293882676,
+    "lat": 52.0784328,
+    "lon": 4.3133961
+  },
+  {
+    "type": "node",
+    "id": 6293882677,
+    "lat": 52.0784372,
+    "lon": 4.3133107
+  },
+  {
+    "type": "node",
+    "id": 6293882678,
+    "lat": 52.0784586,
+    "lon": 4.3126467
+  },
+  {
+    "type": "node",
+    "id": 6293882679,
+    "lat": 52.0784656,
+    "lon": 4.3125137
+  },
+  {
+    "type": "node",
+    "id": 6293882680,
+    "lat": 52.0784841,
+    "lon": 4.3124193
+  },
+  {
+    "type": "node",
+    "id": 6293883185,
+    "lat": 52.0784322,
+    "lon": 4.3123882
+  }
+  
+    ]
+  }
+  

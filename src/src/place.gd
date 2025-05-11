@@ -12,6 +12,8 @@ func _ready():
 	mesh_instance = $MeshInstance3D
 	audio_player = $AudioStreamPlayer3D
 	area = $Area3D
+	
+	
 	label = $MeshInstance3D/Label3D
 	
 	# Connect area signals to scene
@@ -23,6 +25,10 @@ func _ready():
 		area.body_exited.connect(func(body): 
 			if body.name == "Player":
 				scene._on_place_exited(self))
+	
+	# If we already have place_data, set it up now that we're ready
+	if place_data:
+		_setup_place_data()
 
 func set_place_data(data: PlaceData):
 	if not data:
@@ -30,7 +36,14 @@ func set_place_data(data: PlaceData):
 		return
 	
 	place_data = data
+	
+	# If we're not ready yet, wait for _ready to call _setup_place_data
+	if not is_node_ready():
+		return
+		
+	_setup_place_data()
 
+func _setup_place_data():
 	# Assign mesh
 	if place_data.mesh:
 		var mesh_scene = place_data.mesh.instantiate()
