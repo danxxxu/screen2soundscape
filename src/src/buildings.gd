@@ -94,6 +94,27 @@ func draw_debug_triangle_edges(triangles: Array) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.mesh = im_mesh
 	return mesh_instance
+	
+func draw_normals_as_lines(vertices: Array, normals: Array, length: float = 0.3) -> MeshInstance3D:
+	var mesh := ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1, 0, 1)
+
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES, mat)
+
+	for i in range(vertices.size()):
+		var v = vertices[i]
+		var n = normals[i].normalized()
+		mesh.surface_add_vertex(v)
+		mesh.surface_add_vertex(v + n * length)
+
+	mesh.surface_end()
+
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	return mi
+
 func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
 	var my_debug_triangles: Array = []
 	var st = SurfaceTool.new()
@@ -107,21 +128,16 @@ func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
 	var top_points = []
 	var bottom_points = []
 
-	# Convert 2D points to 3D top and bottom
 	for p in points:
 		top_points.append(Vector3(p.x, height, -p.y))
 		bottom_points.append(Vector3(p.x, 0, -p.y))
 
-	#for point in top_points + bottom_points:
-		#render_vertex(point)
-
-	# Compute 2D center for normal projection
 	var center_2d = Vector2.ZERO
 	for p in points:
 		center_2d += p
 	center_2d /= n
 	render_vertex(center_2d)
-	
+
 	# --- Side walls ---
 	for i in range(n):
 		var a2d = points[i]
@@ -134,50 +150,66 @@ func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
 
 		var mid = (a2d + b2d) * 0.5
 		var to_face = (mid - center_2d).normalized()
-		var normal = Vector3(to_face.x, 0, -to_face.y)
+		var normal = Vector3(-to_face.x, 0, to_face.y)
 
 		# Triangle 1
 		st.set_normal(normal); st.add_vertex(a)
 		st.set_normal(normal); st.add_vertex(b)
 		st.set_normal(normal); st.add_vertex(d)
+		my_debug_triangles.append([a, b, d])
 
 		# Triangle 2
 		st.set_normal(normal); st.add_vertex(b)
 		st.set_normal(normal); st.add_vertex(c)
 		st.set_normal(normal); st.add_vertex(d)
-		
-		my_debug_triangles.append([a, b, c])
+		my_debug_triangles.append([b, c, d])
 
-	# --- Top face (triangulated fan) ---
+	# --- Top face ---
 	var top_center = Vector3.ZERO
 	for p in top_points:
 		top_center += p
 	top_center /= n
 
 	for i in range(n):
-		
-		st.set_normal(Vector3.UP); st.add_vertex(top_points[(i + 1) % n])
-		st.set_normal(Vector3.UP); st.add_vertex(top_points[i])
-		
-		st.set_normal(Vector3.UP); st.add_vertex(top_center)
-		
+		var a = top_points[(i + 1) % n]
+		var b = top_points[i]
+		var c = top_center
+		st.set_normal(Vector3.UP); st.add_vertex(a)
+		st.set_normal(Vector3.UP); st.add_vertex(b)
+		st.set_normal(Vector3.UP); st.add_vertex(c)
+		my_debug_triangles.append([a, b, c])
 
-	# --- Bottom face (triangulated fan) ---
+	# --- Bottom face ---
 	var bottom_center = Vector3.ZERO
 	for p in bottom_points:
 		bottom_center += p
 	bottom_center /= n
 
 	for i in range(n):
-		st.set_normal(Vector3.DOWN); st.add_vertex(bottom_center)
-		st.set_normal(Vector3.DOWN); st.add_vertex(bottom_points[(i + 1) % n])
-		st.set_normal(Vector3.DOWN); st.add_vertex(bottom_points[i])
+		var a = bottom_center
+		var b = bottom_points[(i + 1) % n]
+		var c = bottom_points[i]
+		st.set_normal(Vector3.DOWN); st.add_vertex(a)
+		st.set_normal(Vector3.DOWN); st.add_vertex(b)
+		st.set_normal(Vector3.DOWN); st.add_vertex(c)
+		my_debug_triangles.append([a, b, c])
 
 	# Commit and return
 	var mesh_instance = MeshInstance3D.new()
-	mesh_instance.mesh = st.commit()
-	var debug_mesh = draw_debug_triangle_edges(my_debug_triangles)
-	add_child(debug_mesh)
+	var mesh = st.commit()
+	mesh_instance.mesh = mesh
+
+	# Draw triangle edges
+	var debug_edges = draw_debug_triangle_edges(my_debug_triangles)
+	#add_child(debug_edges)
+
+	# Draw vertex normals
+	var arrays = mesh.surface_get_arrays(0)
+	var verts = arrays[Mesh.ARRAY_VERTEX]
+	var norms = arrays[Mesh.ARRAY_NORMAL]
+	var debug_normals = draw_normals_as_lines(verts, norms, 0.3)
+	#add_child(debug_normals)
+
 	return mesh_instance
 
 
@@ -207,7 +239,9 @@ func create_buildings():
 			
 			if building_points.size() < 3:
 				continue  # Skip if not enough points to form a polygon
-			
+			# Remove duplicate closing point if present
+			if building_points.size() > 2 && building_points[0] == building_points[-1]:
+				building_points = building_points.slice(0, building_points.size() - 1)
 			# Create the extruded building
 			var building = create_extruded_polygon(building_points, EXTRUDE_HEIGHT)
 			building.material_override = building_material
