@@ -89,8 +89,18 @@ surface_material_override/0 = SubResource("StandardMaterial3D_i7ydk")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor/StaticBody3D"]
 shape = SubResource("BoxShape3D_a6j3j")
 
+[node name="HeightPlane" type="MeshInstance3D" parent="."]
+transform = Transform3D(-1, 8.74228e-08, 0, -8.74228e-08, -1, 0, 0, 0, 1, 16.337, 10, 0)
+mesh = SubResource("PlaneMesh_xluca")
+surface_material_override/0 = SubResource("StandardMaterial3D_i7ydk")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="HeightPlane"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HeightPlane/StaticBody3D"]
+shape = SubResource("BoxShape3D_a6j3j")
+
 [node name="Player" parent="." instance=ExtResource("2_lveax")]
-transform = Transform3D(0.999951, -0.00327844, 0.00930878, 0.00320079, 0.99996, 0.00834572, -0.00933577, -0.00831553, 0.999922, -69.2702, 19.9696, -22.7835)
+transform = Transform3D(0.999951, -0.00327844, 0.00930878, 0.00320079, 0.99996, 0.00834572, -0.00933577, -0.00831553, 0.999922, -69.27, 5, -22.784)
 
 [node name="Target" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40.4765, 1.49031, -46.1743)
