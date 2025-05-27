@@ -66,7 +66,7 @@ func load_places_from_json() -> void:
 					print("Added place with tags:", place.tags)  # Debug print
 
 func _ready():
-	load_places_from_json()
+	#load_places_from_json()
 	print("Generating", place_scenes.size(), "places...")
 
 	# Create command label

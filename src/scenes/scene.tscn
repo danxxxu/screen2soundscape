@@ -1,11 +1,11 @@
 [gd_scene load_steps=18 format=3 uid="uid://cwrxsfnvowad6"]
 
-[ext_resource type="AudioStream" uid="uid://d21tjv3cyi4b2" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
+[ext_resource type="AudioStream" uid="uid://b1iln2k4tx3fn" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
 [ext_resource type="Script" path="res://src/scene.gd" id="1_ojrou"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://scenes/player.tscn" id="2_lveax"]
-[ext_resource type="Texture2D" uid="uid://dcr1a2if65q1y" path="res://assets/images/rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
-[ext_resource type="AudioStream" uid="uid://dpdbytt4atqal" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
-[ext_resource type="AudioStream" uid="uid://cyxe536c4i73x" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
+[ext_resource type="Texture2D" uid="uid://beiyqjnupuo8t" path="res://assets/images/rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
+[ext_resource type="AudioStream" uid="uid://dvockxv7vkmdk" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
+[ext_resource type="AudioStream" uid="uid://cuh2t31p1slob" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
 [ext_resource type="Script" path="res://src/way_tubes.gd" id="5_abcde"]
 [ext_resource type="Script" path="res://src/buildings.gd" id="6_build"]
 

@@ -28,8 +28,8 @@ func _ready():
 				scene._on_place_exited(self))
 	
 	# If we already have place_data, set it up now that we're ready
-	if place_data:
-		_setup_place_data()
+	#if place_data:
+		#_setup_place_data()
 
 func set_place_data(data: PlaceData):
 	if not data:
@@ -42,7 +42,7 @@ func set_place_data(data: PlaceData):
 	if not is_node_ready():
 		return
 		
-	_setup_place_data()
+	#_setup_place_data()
 
 func _setup_place_data():
 	# Assign mesh
