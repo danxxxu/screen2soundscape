@@ -2,17 +2,16 @@
 
 [ext_resource type="Script" path="res://src/place.gd" id="1_qqxvw"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_8yvxr"]
-size = Vector3(5, 0.1, 5)
+[sub_resource type="CylinderMesh" id="CylinderMesh_yw0g7"]
 
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_n2mfs"]
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_6mghr"]
 
 [node name="Place" type="Node3D"]
 transform = Transform3D(2.03431, 0, 0, 0, 1, 0, 0, 0, 1.86212, 0, 0, 0)
 script = ExtResource("1_qqxvw")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("BoxMesh_8yvxr")
+mesh = SubResource("CylinderMesh_yw0g7")
 
 [node name="Label3D" type="Label3D" parent="MeshInstance3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
@@ -23,10 +22,15 @@ text = "Place Name"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
-transform = Transform3D(8.32948, 0, 0, 0, 1, 0, 0, 0, 7.89772, 0, 0, 0)
-shape = SubResource("CylinderShape3D_n2mfs")
+transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0)
+shape = SubResource("CylinderShape3D_6mghr")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="."]
+unit_size = 20.0
+max_distance = 20.0
+
+[node name="ambient_audio" type="AudioStreamPlayer3D" parent="."]
+transform = Transform3D(0.491567, 0, 0, 0, 1, 0, 0, 0, 0.537022, 0, 0, 0)
 unit_size = 20.0
 max_distance = 20.0
 

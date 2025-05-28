@@ -15,6 +15,8 @@ func _ready():
 	load_buildings()
 	create_materials()
 	create_buildings()
+	
+	#test
 	#create_extruded_polygon([
 		#Vector2(10, 4),
 		#Vector2(-10, 4),
@@ -196,31 +198,6 @@ func create_extruded_polygon2(points: Array, height: float) -> MeshInstance3D:
 		st.add_vertex(d)
 		my_debug_triangles.append([b, c, d])
 	
-	#for i in range(n):
-		#var a2d = points[i]
-		#var b2d = points[(i + 1) % n]
-#
-		#var a = Vector3(a2d.x, 0, -a2d.y)
-		#var b = Vector3(b2d.x, 0, -b2d.y)
-		#var c = Vector3(b2d.x, height, -b2d.y)
-		#var d = Vector3(a2d.x, height, -a2d.y)
-#
-		#var mid = (a2d + b2d) * 0.5
-		#var to_face = (mid - center_2d).normalized()
-		#var normal = Vector3(-to_face.x, 0, to_face.y)
-#
-		## Triangle 1
-		#st.set_normal(normal); st.add_vertex(a)
-		#st.set_normal(normal); st.add_vertex(b)
-		#st.set_normal(normal); st.add_vertex(d)
-		#my_debug_triangles.append([a, b, d])
-#
-		## Triangle 2
-		#st.set_normal(normal); st.add_vertex(b)
-		#st.set_normal(normal); st.add_vertex(c)
-		#st.set_normal(normal); st.add_vertex(d)
-		#my_debug_triangles.append([b, c, d])
-
 	# --- Top face ---
 	var top_center = Vector3.ZERO
 	for p in top_points:

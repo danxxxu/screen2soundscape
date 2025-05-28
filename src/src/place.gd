@@ -6,12 +6,14 @@ const PlaceData = preload("res://src/models/Place.gd")
 var place_data = null
 var mesh_instance: MeshInstance3D
 var audio_player: AudioStreamPlayer3D
+var ambient_player: AudioStreamPlayer3D
 var area: Area3D
 var label: Label3D
 
 func _ready():
 	mesh_instance = $MeshInstance3D
 	audio_player = $AudioStreamPlayer3D
+	ambient_player = $ambient_audio
 	area = $Area3D
 	
 	
@@ -28,8 +30,8 @@ func _ready():
 				scene._on_place_exited(self))
 	
 	# If we already have place_data, set it up now that we're ready
-	#if place_data:
-		#_setup_place_data()
+	if place_data:
+		_setup_place_data()
 
 func set_place_data(data: PlaceData):
 	if not data:
@@ -42,7 +44,7 @@ func set_place_data(data: PlaceData):
 	if not is_node_ready():
 		return
 		
-	#_setup_place_data()
+	_setup_place_data()
 
 func _setup_place_data():
 	# Assign mesh
