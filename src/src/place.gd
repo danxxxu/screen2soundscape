@@ -57,6 +57,21 @@ func _setup_place_data():
 	if place_data.sound:
 		audio_player.stream = place_data.sound
 
+	# Assign ambient sound based on type
+	if place_data.type:
+		#var sound_path = "res://assets/audio/places/" + place_data.type + ".mp3"
+		var sound_path = "res://assets/audio/places/cafe.mp3"
+		
+		if (place_data.type == "cafe" or place_data.type == "atm"):
+			sound_path = "res://assets/audio/places/" + place_data.type + ".mp3"
+
+		var sound = load(sound_path)
+		if sound:
+			ambient_player.stream = sound
+			ambient_player.play()
+		else:
+			print("⚠️ Could not load ambient sound for type:", place_data.type, "at path:", sound_path)
+
 	# Set the text label
 	if label:
 		label.text = place_data.name
@@ -71,9 +86,9 @@ func _setup_place_data():
 				address += " " + place_data.tags["addr:housenumber"]
 			label.text += "\n" + address
 
-	print("✅ Place:", place_data.name, "Type:", place_data.type)
-	if place_data.tags:
-		print("📍 Tags:", place_data.tags)
+	
+
+
 
 func speak(text: String, lang: String = "en-US"):
 	if OS.has_feature("web"):

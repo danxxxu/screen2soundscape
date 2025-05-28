@@ -49,14 +49,27 @@ func load_places_from_json() -> void:
 					
 					# Get name and type
 					place.name = element["tags"].get("name", "Unnamed Place")
-					place.type = element["tags"].get("amenity", element["tags"].get("shop", "unknown"))
+					
+					# Determine type from tags
+					var type = "unknown"
+					if element["tags"].has("amenity"):
+						type = element["tags"]["amenity"]
+					elif element["tags"].has("shop"):
+						type = element["tags"]["shop"]
+					elif element["tags"].has("tourism"):
+						type = element["tags"]["tourism"]
+					elif element["tags"].has("leisure"):
+						type = element["tags"]["leisure"]
+					elif element["tags"].has("railway"):
+						type = element["tags"]["railway"]
+					place.type = type
 					
 					# Convert coordinates
 					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
 					place.x = local_coords.x
 					place.z = -local_coords.y
 					
-					# Assign random mesh and sound
+					# Assign random mesh
 					if place_meshes.size() > 0:
 						place.mesh = place_meshes[randi() % place_meshes.size()]
 					if place_sounds.size() > 0:
