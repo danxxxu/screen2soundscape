@@ -69,22 +69,33 @@ func update_pitch(distance):
 
 
 func speak(text, lang = "en-US"):
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval("""
-			(function() {
-				var msg = new SpeechSynthesisUtterance();
-				msg.text = "%s";
-				msg.lang = "%s";
-				window.speechSynthesis.speak(msg);
-			})();
-		""" % [text, lang])
+	#if OS.has_feature("web"):
+		#JavaScriptBridge.eval("""
+			#(function() {
+				#var msg = new SpeechSynthesisUtterance();
+				#msg.text = "%s";
+				#msg.lang = "%s";
+				#window.speechSynthesis.speak(msg);
+			#})();
+		#""" % [text, lang])
+	#else:
+	#DisplayServer.tts_speak(text, lang)
+	if OS.get_name() == "macOS":
+		# Fallback using `say` command to enforce voice
+		var voice = "Thomas"
+
+		var args = ["-v", voice, text]
+		OS.execute("say", args, [])  
 	else:
-		DisplayServer.tts_speak(text, "en")
+		# Use Godot TTS if not macOS
+		DisplayServer.tts_speak(text, lang)
 		
 
 
 func _ready():
 #	pass
+	speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l’est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l’endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l’adresse.", "fr")
+
 	speak(" Hello ! You are at Grand Place 32 facing north. Find the closest Spar supermarket. Explore to the East. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
 
 
