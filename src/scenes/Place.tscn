@@ -1,17 +1,22 @@
-[gd_scene load_steps=4 format=3 uid="uid://b4u1qfg8fe4yl"]
+[gd_scene load_steps=5 format=3 uid="uid://b4u1qfg8fe4yl"]
 
 [ext_resource type="Script" path="res://src/place.gd" id="1_qqxvw"]
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_yw0g7"]
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_red"]
+albedo_color = Color(1, 0, 0, 1)
+
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_6mghr"]
 
 [node name="Place" type="Node3D"]
-transform = Transform3D(2.03431, 0, 0, 0, 1, 0, 0, 0, 1.86212, 0, 0, 0)
+transform = Transform3D(3.314, 0, 0, 0, 1.629, 0, 0, 0, 3.034, 0, 0, 0)
 script = ExtResource("1_qqxvw")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.07451, 0)
 mesh = SubResource("CylinderMesh_yw0g7")
+surface_material_override/0 = SubResource("StandardMaterial3D_red")
 
 [node name="Label3D" type="Label3D" parent="MeshInstance3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)

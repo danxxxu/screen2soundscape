@@ -34,6 +34,89 @@ func convert_to_local_coords(lat: float, lon: float) -> Vector2:
 	
 	return Vector2(x, z)
 
+func adjust_place_position(place_pos: Vector2) -> Vector2:
+	var buildings_node = get_node("Buildings")
+	if not buildings_node:
+		return place_pos
+		
+	var min_dist = INF
+	var best_adjustment = place_pos
+	
+	# Get all building meshes
+	for building in buildings_node.get_children():
+		if building is MeshInstance3D:
+			var mesh = building.mesh
+			if mesh:
+				var arrays = mesh.surface_get_arrays(0)
+				var vertices = arrays[Mesh.ARRAY_VERTEX]
+				
+				# Convert 3D vertices to 2D points
+				var building_points = []
+				for v in vertices:
+					building_points.append(Vector2(v.x, -v.z))  # Note: z is negated to match coordinate system
+				
+				if building_points.size() < 3:
+					continue
+				
+				# Find nearest point on perimeter
+				var nearest = find_nearest_point_on_perimeter(place_pos, building_points)
+				if nearest.distance < min_dist:
+					min_dist = nearest.distance
+					best_adjustment = nearest.point + nearest.normal * 1.0  # 1.0 units outward
+	
+	return best_adjustment
+
+func find_nearest_point_on_perimeter(point: Vector2, building_points: Array) -> Dictionary:
+	var min_dist = INF
+	var nearest_point = Vector2.ZERO
+	var normal = Vector2.ZERO
+	
+	# For each edge of the building
+	for i in range(building_points.size()):
+		var p1 = building_points[i]
+		var p2 = building_points[(i + 1) % building_points.size()]
+		
+		# Calculate the nearest point on this edge
+		var edge = p2 - p1
+		var edge_length = edge.length()
+		var edge_dir = edge / edge_length
+		
+		# Vector from p1 to the point
+		var to_point = point - p1
+		
+		# Project the point onto the edge
+		var projection = to_point.dot(edge_dir)
+		projection = clamp(projection, 0, edge_length)
+		
+		# Calculate the nearest point on the edge
+		var nearest = p1 + edge_dir * projection
+		
+		# Calculate distance to this point
+		var dist = point.distance_to(nearest)
+		
+		if dist < min_dist:
+			min_dist = dist
+			nearest_point = nearest
+			
+			# Calculate normal (perpendicular to edge, pointing outward)
+			var center = Vector2.ZERO
+			for p in building_points:
+				center += p
+			center /= building_points.size()
+			
+			# Calculate normal (perpendicular to edge)
+			normal = Vector2(-edge_dir.y, edge_dir.x)
+			
+			# Make sure normal points outward
+			if normal.dot(nearest - center) < 0:
+				normal = -normal
+	
+	return {
+		"point": nearest_point,
+		"normal": normal,
+		"distance": min_dist
+	}
+
 func load_places_from_json() -> void:
 	var file = FileAccess.open("res://src/models/places.json", FileAccess.READ)
 	if file:
@@ -66,8 +149,11 @@ func load_places_from_json() -> void:
 					
 					# Convert coordinates
 					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
-					place.x = local_coords.x
-					place.z = -local_coords.y
+					
+					# Adjust position to be on building perimeter if needed
+					var adjusted_coords = adjust_place_position(Vector2(local_coords.x, local_coords.y))
+					place.x = adjusted_coords.x
+					place.z = -adjusted_coords.y
 					
 					# Assign random mesh
 					if place_meshes.size() > 0:

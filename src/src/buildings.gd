@@ -53,12 +53,11 @@ func load_buildings():
 func create_materials():
 	# Building material
 	building_material = StandardMaterial3D.new()
-	building_material.albedo_color = Color(0.7, 0.7, 0.7, 1)  # Light gray color
+	building_material.albedo_color = Color(0.7, 0.7, 0.7, 0.5)  # Light gray color with 50% transparency
 	building_material.roughness = 0.8
 	building_material.metallic = 0.2
 	building_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-	building_material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	building_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
 func render_vertex(point):
 	var debug_material := StandardMaterial3D.new()
@@ -365,8 +364,8 @@ func create_buildings():
 				building_points = building_points.slice(0, building_points.size() - 1)
 			# Create the extruded building
 			var building = create_extruded_polygon(building_points, EXTRUDE_HEIGHT)
-			#building.material_override = building_material
-			
+			building.material_override = building_material
+
 			# Add collision shape
 			var collision_body = StaticBody3D.new()
 			var collision_shape = CollisionShape3D.new()
