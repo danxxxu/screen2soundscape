@@ -6,5 +6,6 @@
 
 
 # Deploy
-Editor -> Manage Export Templates -> Download
-Project -> Export -> Add Web -> Export project -> Public folder in this repo
+- Editor -> Manage Export Templates -> Download
+- Project -> Export -> Add Web -> Export project -> Public folder in this repo
+- `python3 -m http.server 8000` in public folder
