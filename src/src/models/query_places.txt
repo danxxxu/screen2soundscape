@@ -1,0 +1,28 @@
+[out:json][timeout:1800];
+area["name"="Den Haag"]->.searchArea;
+
+(
+  node["amenity"="restaurant"](52.068,4.300,52.090,4.340);
+  node["amenity"="cafe"](52.068,4.300,52.090,4.340);
+  node["amenity"="hospital"](52.068,4.300,52.090,4.340);
+  node["amenity"="pharmacy"](52.068,4.300,52.090,4.340);
+  node["amenity"="bank"](52.068,4.300,52.090,4.340);
+  node["amenity"="atm"](52.068,4.300,52.090,4.340);
+  node["amenity"="school"](52.068,4.300,52.090,4.340);
+  node["amenity"="university"](52.068,4.300,52.090,4.340);
+  node["amenity"="toilets"](52.068,4.300,52.090,4.340);
+  node["amenity"="police"](52.068,4.300,52.090,4.340);
+  node["amenity"="fire_station"](52.068,4.300,52.090,4.340);
+  node["shop"="supermarket"](52.068,4.300,52.090,4.340);
+  node["shop"="convenience"](52.068,4.300,52.090,4.340);
+  node["tourism"="hotel"](52.068,4.300,52.090,4.340);
+  node["tourism"="attraction"](52.068,4.300,52.090,4.340);
+  node["leisure"="park"](52.068,4.300,52.090,4.340);
+  node["amenity"="post_office"](52.068,4.300,52.090,4.340);
+  node["amenity"="fuel"](52.068,4.300,52.090,4.340);
+  node["amenity"="bus_station"](52.068,4.300,52.090,4.340);
+  node["railway"="station"](52.068,4.300,52.090,4.340);
+);
+
+out center 10000
+  ;

@@ -58,13 +58,16 @@ func _setup_place_data():
 		audio_player.stream = place_data.sound
 
 	# Assign ambient sound based on type
-	if place_data.type:
+	if place_data.type:#
+		# LIVE
 		#var sound_path = "res://assets/audio/places/" + place_data.type + ".mp3"
+		
+		# TEST
 		var sound_path = "res://assets/audio/places/cafe.mp3"
 		
 		if (place_data.type == "cafe" or place_data.type == "atm"):
 			sound_path = "res://assets/audio/places/" + place_data.type + ".mp3"
-
+		# END TEST
 		var sound = load(sound_path)
 		if sound:
 			ambient_player.stream = sound
