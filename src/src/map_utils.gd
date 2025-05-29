@@ -7,12 +7,12 @@ class_name MapUtils
 const MAP_SIZE = Vector3(1000, 0, 1000)
 const GRID_STEP = 5.0
 
-# Center coordinates (Dudok cafe)
-const CENTER_LAT = 52.0785266
-const CENTER_LON = 4.3117263
+
+const CENTER_LAT = 50.669515
+const CENTER_LON = 4.611868
 
 # Scale factor to convert degrees to local units
-const SCALE_FACTOR = 100
+const SCALE_FACTOR = 200
 
 # Convert lat/lon to local coordinates
 static func convert_to_local_coords(lat: float, lon: float) -> Vector2:

@@ -6,9 +6,10 @@ const PlaceData = preload("res://src/models/Place.gd")
 @export var place_sounds: Array[AudioStream] # Assign random sounds in the editor
 
 var place_scenes: Array[PlaceData] # Holds dynamically generated places
-var center_lat: float = 50.67020061865339
-var center_lon: float = 4.611801554263047
-var scale_factor: float = 1000.0    # Scale factor to convert degrees to local units
+var center_lat: float = 50.669515
+var center_lon: float = 4.611868
+
+var scale_factor: float = 200.0    # Scale factor to convert degrees to local units
 
 var command_mode: bool = false
 var current_command: String = ""

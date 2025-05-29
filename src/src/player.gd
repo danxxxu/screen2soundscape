@@ -84,8 +84,8 @@ func speak(text, lang = "en-US"):
 
 
 func _ready():
-	pass
-	#speak(" Hello ! Walk through the space to find the elevator or the fountain. Hold the shift key to hear the approximate distance. Press Tab to switch target.")
+#	pass
+	speak(" Hello ! You are at Grand Place 32 facing north. Find the closest Spar supermarket. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
 
 
 func _physics_process(delta):
