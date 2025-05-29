@@ -162,7 +162,6 @@ func load_places_from_json() -> void:
 						place.sound = place_sounds[randi() % place_sounds.size()]
 					
 					place_scenes.append(place)
-					print("Added place with tags:", place.tags)  # Debug print
 
 func _ready():
 	load_places_from_json()
@@ -190,7 +189,7 @@ func _ready():
 		)
 		
 		add_child(place_instance)
-		print("Added place:", place_data.name, "at position:", place_instance.position)
+		#print("Added place:", place_data.name, "at position:", place_instance.position)
 
 func update_command_label():
 	if command_mode:

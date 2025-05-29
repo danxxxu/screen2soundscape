@@ -45,6 +45,7 @@ func load_buildings():
 						"lat": element.lat,
 						"lon": element.lon
 					}
+			print('Loaded buildings', building_data.elements.size())	
 		else:
 			print("JSON Parse Error: ", json.get_error_message())
 	else:
