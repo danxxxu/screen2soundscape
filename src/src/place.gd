@@ -15,8 +15,6 @@ func _ready():
 	audio_player = $AudioStreamPlayer3D
 	ambient_player = $ambient_audio
 	area = $Area3D
-	
-	
 	label = $MeshInstance3D/Label3D
 	
 	# Connect area signals to scene
@@ -89,30 +87,6 @@ func _setup_place_data():
 				address += " " + place_data.tags["addr:housenumber"]
 			label.text += "\n" + address
 
-	
-
-
-
-func speak(text: String, lang: String = "en-US"):
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval("""
-			(function() {
-				var msg = new SpeechSynthesisUtterance();
-				msg.text = "%s";
-				msg.lang = "%s";
-				window.speechSynthesis.speak(msg);
-			})();
-		""" % [text, lang])
-	else:
-		DisplayServer.tts_speak(text, "default", 100, 1.0, 1.0)
-
-func stop_speaking():
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval("""
-			window.speechSynthesis.cancel();
-		""")
-	else:
-		DisplayServer.tts_stop()
 
 func _on_area_3d_body_entered(body):
 	if body.name == "Player" and place_data:
@@ -121,12 +95,12 @@ func _on_area_3d_body_entered(body):
 		if place_data.type != "unknown":
 			announcement += place_data.type + " " 
 		announcement += place_data.name
-		speak(announcement)
+		Speaker.speak(announcement)
 		if audio_player.stream:
 			audio_player.play()
 
 func _on_area_3d_body_exited(body):
 	if body.name == "Player":
-		stop_speaking()  # Stop any ongoing TTS speech
+		Speaker.stop_speaking()
 		if audio_player.playing:
 			audio_player.stop()

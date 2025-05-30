@@ -1,7 +1,0 @@
-[out:json][timeout:25];
-
-// Rough bounding box around Den Haag center
-way["highway"="pedestrian"](52.073, 4.295, 52.086, 4.320);
-out body;
->;
-out skel qt;

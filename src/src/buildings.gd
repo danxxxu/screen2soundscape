@@ -253,13 +253,18 @@ func create_buildings():
 		if element.type == "way" and element.has("tags") and element.tags.has("building"):
 			# Get all nodes for this building in order
 			var building_points = []
-			
+			var outside_of_map = false;
 			# First pass: collect points
 			for node_id in element.nodes:
 				if node_data.has(node_id):
 					var node = node_data[node_id]
 					var local_coords = MapUtils.convert_to_local_coords(node.lat, node.lon)
+					if local_coords.x >=500 or local_coords.x<=-500 or local_coords.y >= 500 or local_coords.y <=-500 :
+						outside_of_map = true
 					building_points.append(Vector2(local_coords.x, local_coords.y))
+			
+			if outside_of_map:
+				continue		
 			
 			if building_points.size() < 3:
 				continue  # Skip if not enough points to form a polygon
@@ -279,6 +284,7 @@ func create_buildings():
 
 			collision_body.add_child(collision_shape)
 			building.add_child(collision_body)
+			
 			
 			# Add the building to the container
 			buildings_container.add_child(building) 

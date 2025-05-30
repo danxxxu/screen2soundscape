@@ -39,16 +39,16 @@ func _input(event):
 			elif not event.pressed and event.keycode == KEY_SHIFT:
 				distance_audio.stop()  # Stop when Shift is released
 			if event.pressed and event.keycode == KEY_E:
-				speak('Road on the right.')
+				Speaker.speak('Road on the right.')
 			if event.pressed and event.keycode == KEY_Q:
-				speak('Building on the left.')
+				Speaker.speak('Building on the left.')
 			if event.pressed and event.keycode == KEY_TAB:
 				if currentTarget == target:
 					currentTarget = target2
-					speak('To the Fountain')
+					Speaker.speak('To the Fountain')
 				else:
 					currentTarget = target
-					speak('To the elevator')
+					Speaker.speak('To the elevator')
 
 
 func _process(delta):
@@ -60,43 +60,17 @@ func _process(delta):
 func update_pitch(distance):
 	# Normalize distance to range [0, 1]
 	var normalized = clamp((distance - min_distance) / (max_distance - min_distance), 0, 1)
-
 	# Map distance to pitch range
 	var pitch_value = lerp(max_pitch, min_pitch, normalized)
-
 	# Apply pitch to audio player
 	distance_audio.pitch_scale = pitch_value
 
 
-func speak(text, lang = "en-US"):
-	#if OS.has_feature("web"):
-		#JavaScriptBridge.eval("""
-			#(function() {
-				#var msg = new SpeechSynthesisUtterance();
-				#msg.text = "%s";
-				#msg.lang = "%s";
-				#window.speechSynthesis.speak(msg);
-			#})();
-		#""" % [text, lang])
-	#else:
-	#DisplayServer.tts_speak(text, lang)
-	if OS.get_name() == "macOS":
-		# Fallback using `say` command to enforce voice
-		var voice = "Thomas"
-
-		var args = ["-v", voice, text]
-		OS.execute("say", args, [])  
-	else:
-		# Use Godot TTS if not macOS
-		DisplayServer.tts_speak(text, lang)
-		
-
-
 func _ready():
 #	pass
-	speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l’est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l’endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l’adresse.", "fr")
+	Speaker.speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l’est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l’endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l’adresse.", "fr")
 
-	speak(" Hello ! You are at Grand Place 32 facing north. Find the closest Spar supermarket. Explore to the East. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
+	Speaker.speak(" Hello ! You are at Grand Place 32 facing north. Find the closest Spar supermarket. Explore to the East. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
 
 
 func _physics_process(delta):
@@ -123,11 +97,8 @@ func _physics_process(delta):
 	# Check for turn actions
 	if Input.is_action_pressed("turn_left"):
 		neck.rotate_y(turn_speed * delta)
-		#camera.rotate_x(turn_speed * delta)
 	elif Input.is_action_pressed("turn_right"):
 		neck.rotate_y(-turn_speed * delta)
-		#camera.rotate_x(-turn_speed * delta)
-		
 
 
 # footstep sounds

@@ -6,10 +6,6 @@ const PlaceData = preload("res://src/models/Place.gd")
 @export var place_sounds: Array[AudioStream] # Assign random sounds in the editor
 
 var place_scenes: Array[PlaceData] # Holds dynamically generated places
-var center_lat: float = 50.669515
-var center_lon: float = 4.611868
-
-var scale_factor: float = 200.0    # Scale factor to convert degrees to local units
 
 var command_mode: bool = false
 var current_command: String = ""
@@ -17,32 +13,14 @@ var command_label: Label
 var current_place: Node3D = null  # Store the current place player is near
 var player: Node3D = null  # Reference to the player node
 
-# Convert lat/lon to local coordinates
-func convert_to_local_coords(lat: float, lon: float) -> Vector2:
-	# Calculate difference from center point
-	var lat_diff = lat - center_lat
-	var lon_diff = lon - center_lon
-	
-	# Convert to local coordinates
-	# We multiply by scale_factor to convert tiny degree differences to meaningful distances
-	# Note: cos(center_lat) accounts for longitude distortion at different latitudes
-	var x = lon_diff * cos(deg_to_rad(center_lat)) * scale_factor
-	var z = lat_diff * scale_factor
-	
-	# Scale to map bounds
-	x = clamp(x * map_size.x, -map_size.x / 2, map_size.x / 2)
-	z = clamp(z * map_size.z, -map_size.z / 2, map_size.z / 2)
-	
-	return Vector2(x, z)
-
 func adjust_place_position(place_pos: Vector2) -> Vector2:
 	var buildings_node = get_node("Buildings")
 	if not buildings_node:
 		return place_pos
-		
+
 	var min_dist = INF
 	var best_adjustment = place_pos
-	
+
 	# Get all building meshes
 	for building in buildings_node.get_children():
 		if building is MeshInstance3D:
@@ -50,68 +28,68 @@ func adjust_place_position(place_pos: Vector2) -> Vector2:
 			if mesh:
 				var arrays = mesh.surface_get_arrays(0)
 				var vertices = arrays[Mesh.ARRAY_VERTEX]
-				
+
 				# Convert 3D vertices to 2D points
 				var building_points = []
 				for v in vertices:
 					building_points.append(Vector2(v.x, -v.z))  # Note: z is negated to match coordinate system
-				
+
 				if building_points.size() < 3:
 					continue
-				
+
 				# Find nearest point on perimeter
 				var nearest = find_nearest_point_on_perimeter(place_pos, building_points)
 				if nearest.distance < min_dist:
 					min_dist = nearest.distance
 					best_adjustment = nearest.point + nearest.normal * 1.0  # 1.0 units outward
-	
+
 	return best_adjustment
 
 func find_nearest_point_on_perimeter(point: Vector2, building_points: Array) -> Dictionary:
 	var min_dist = INF
 	var nearest_point = Vector2.ZERO
 	var normal = Vector2.ZERO
-	
+
 	# For each edge of the building
 	for i in range(building_points.size()):
 		var p1 = building_points[i]
 		var p2 = building_points[(i + 1) % building_points.size()]
-		
+
 		# Calculate the nearest point on this edge
 		var edge = p2 - p1
 		var edge_length = edge.length()
 		var edge_dir = edge / edge_length
-		
+
 		# Vector from p1 to the point
 		var to_point = point - p1
-		
+
 		# Project the point onto the edge
 		var projection = to_point.dot(edge_dir)
 		projection = clamp(projection, 0, edge_length)
-		
+
 		# Calculate the nearest point on the edge
 		var nearest = p1 + edge_dir * projection
-		
+
 		# Calculate distance to this point
 		var dist = point.distance_to(nearest)
-		
+
 		if dist < min_dist:
 			min_dist = dist
 			nearest_point = nearest
-			
+
 			# Calculate normal (perpendicular to edge, pointing outward)
 			var center = Vector2.ZERO
 			for p in building_points:
 				center += p
 			center /= building_points.size()
-			
+
 			# Calculate normal (perpendicular to edge)
 			normal = Vector2(-edge_dir.y, edge_dir.x)
-			
+
 			# Make sure normal points outward
 			if normal.dot(nearest - center) < 0:
 				normal = -normal
-	
+
 	return {
 		"point": nearest_point,
 		"normal": normal,
@@ -127,13 +105,13 @@ func load_places_from_json() -> void:
 			for element in json["elements"]:
 				if element["type"] == "node" and element.has("tags"):
 					var place = PlaceData.new()
-					
+
 					# Store all tags
 					place.tags = element["tags"].duplicate()
-					
+
 					# Get name and type
 					place.name = element["tags"].get("name", "Unnamed Place")
-					
+
 					# Determine type from tags
 					var type = "unknown"
 					if element["tags"].has("amenity"):
@@ -147,21 +125,21 @@ func load_places_from_json() -> void:
 					elif element["tags"].has("railway"):
 						type = element["tags"]["railway"]
 					place.type = type
-					
+
 					# Convert coordinates
 					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
-					
+
 					# Adjust position to be on building perimeter if needed
 					var adjusted_coords = adjust_place_position(Vector2(local_coords.x, local_coords.y))
 					place.x = adjusted_coords.x
 					place.z = -adjusted_coords.y
-					
+
 					# Assign random mesh
 					if place_meshes.size() > 0:
 						place.mesh = place_meshes[randi() % place_meshes.size()]
 					if place_sounds.size() > 0:
 						place.sound = place_sounds[randi() % place_sounds.size()]
-					
+
 					place_scenes.append(place)
 
 func _ready():
@@ -174,7 +152,7 @@ func _ready():
 	command_label.visible = false
 	$HUD.add_child(command_label)
 	update_command_label()
-	
+
 	# Get reference to player node
 	player = get_node("Player")
 
@@ -182,15 +160,14 @@ func _ready():
 		var scene = load("res://scenes/Place.tscn")
 		var place_instance = scene.instantiate()
 		place_instance.set_place_data(place_data)
-		
+
 		place_instance.position = Vector3(
 			place_data.x,
 			0,
 			place_data.z
 		)
-		
+
 		add_child(place_instance)
-		#print("Added place:", place_data.name, "at position:", place_instance.position)
 
 func update_command_label():
 	if command_mode:
