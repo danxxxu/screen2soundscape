@@ -114,24 +114,17 @@ func load_places_from_json() -> void:
 
 					# Determine type from tags
 					var type = "unknown"
-					var category = "unknown"
 					if element["tags"].has("amenity"):
 						type = element["tags"]["amenity"]
-						category = "amenity"
 					elif element["tags"].has("shop"):
 						type = element["tags"]["shop"]
-						category = "shop"
 					elif element["tags"].has("tourism"):
 						type = element["tags"]["tourism"]
-						category = "tourism"
 					elif element["tags"].has("leisure"):
 						type = element["tags"]["leisure"]
-						category = "leisure"
 					elif element["tags"].has("railway"):
 						type = element["tags"]["railway"]
-						category = "railway"
 					place.type = type
-					place.category = category
 
 					# Convert coordinates
 					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
