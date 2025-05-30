@@ -32,7 +32,7 @@ stream = ExtResource("2_vqdj0")
 
 [node name="footstep" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("3_thov6")
-volume_db = -18.024
+volume_db = -20.215
 
 [node name="Timer" type="Timer" parent="."]
 one_shot = true
