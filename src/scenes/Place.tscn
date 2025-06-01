@@ -39,7 +39,7 @@ max_distance = 20.0
 [node name="ambient_audio" type="AudioStreamPlayer3D" parent="."]
 transform = Transform3D(0.30175, 0, 0, 0, 0.613874, 0, 0, 0, 0.329598, 0, 2.3924, 0)
 attenuation_model = 1
-volume_db = -11.494
+volume_db = -46.966
 unit_size = 100.0
 autoplay = true
 max_distance = 70.0
