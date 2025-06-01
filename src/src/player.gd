@@ -68,9 +68,10 @@ func update_pitch(distance):
 
 func _ready():
 #	pass
-	Speaker.speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l’est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l’endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l’adresse.", "fr")
-
-	Speaker.speak(" Hello ! You are at Grand Place 32 facing north. Find the closest Spar supermarket. Explore to the East. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
+#	Speaker.speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l’est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l’endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l’adresse.", "fr")
+	var current_place = "the Kerkplein"
+	var to_find = "Cafe Dok 19"
+	Speaker.speak(" Hello ! You are at " + current_place + " facing north. Find " + to_find + ". Press shift to hear the proximity sensor to the search place. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
 
 
 func _physics_process(delta):

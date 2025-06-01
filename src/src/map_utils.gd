@@ -7,8 +7,8 @@ class_name MapUtils
 const MAP_SIZE = Vector3(1000, 0, 1000)
 const GRID_STEP = 5.0
 
-const CENTER_LAT = 50.669515
-const CENTER_LON = 4.611868
+const CENTER_LAT = 51.5887608
+const CENTER_LON = 4.7754033
 
 # Scale factor to convert degrees to local units
 const SCALE_FACTOR = 200
