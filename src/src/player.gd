@@ -14,6 +14,7 @@ var target_velocity = Vector3.ZERO
 @onready var target := $"../Target"
 @onready var target2 := $"../RainTarget"
 @onready var currentTarget := target
+@onready var sliding_audio := $sliding_audio
 
 var min_distance: float = 5.0  # Closest distance (highest pitch)
 var max_distance: float = 300.0 # Farthest distance (lowest pitch)
@@ -26,6 +27,7 @@ var max_pitch: float    = 2.0      # Highest pitch
 #const footstep_concrete = preload("res://sounds/footsteps/footstep_concrete.wav")
 
 var _movement_enabled: bool = true
+var is_sliding: bool = false
 
 func set_movement_enabled(enabled: bool):
 	_movement_enabled = enabled
@@ -68,11 +70,47 @@ func update_pitch(distance):
 
 func _ready():
 #	pass
-#	Speaker.speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l’est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l’endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l’adresse.", "fr")
+#	Speaker.speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l'est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l'endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l'adresse.", "fr")
 	var current_place = "the Kerkplein"
 	var to_find = "Cafe Dok 19"
 	Speaker.speak(" Hello ! You are at " + current_place + " facing north. Find " + to_find + ". Press shift to hear the proximity sensor to the search place. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
 
+	# Load the sliding sound
+	var sliding_sound = load("res://assets/sounds/sliding.mp3")
+	if sliding_sound:
+		sliding_audio.stream = sliding_sound
+		sliding_audio.volume_db = -10  # Adjust volume as needed
+	else:
+		push_error("Could not load sliding.mp3 sound file")
+		
+	# Connect collision signals
+	print("Connecting collision signals...")
+	connect("body_entered", _on_body_entered)
+	connect("body_exited", _on_body_exited)
+	print("Collision signals connected")
+
+func _on_body_entered(body):
+	print("Body entered signal received")
+	print("Body name: ", body.name)
+	print("Body groups: ", body.get_groups())
+	if body.is_in_group("buildings"):
+		is_sliding = true
+		print("Entered building collision")
+		if not sliding_audio.playing:
+			sliding_audio.play()
+	else:
+		print("Body is not in buildings group")
+
+func _on_body_exited(body):
+	print("Body exited signal received")
+	print("Body name: ", body.name)
+	print("Body groups: ", body.get_groups())
+	if body.is_in_group("buildings"):
+		is_sliding = false
+		print("Exited building collision")
+		sliding_audio.stop()
+	else:
+		print("Body is not in buildings group")
 
 func _physics_process(delta):
 	if not _movement_enabled:
@@ -91,6 +129,22 @@ func _physics_process(delta):
 	# Moving the Character
 	velocity = target_velocity
 	move_and_slide()
+	
+	# Play sliding sound when touching walls
+	if is_on_wall():
+		if not sliding_audio.playing:
+			sliding_audio.play()
+	else:
+		sliding_audio.stop()
+	
+	# Debug collision state
+	if get_slide_collision_count() > 0:
+		for i in range(get_slide_collision_count()):
+			var collision = get_slide_collision(i)
+			var collider = collision.get_collider()
+			print("Colliding with: ", collider.name)
+			print("Collider groups: ", collider.get_groups())
+	
 	footstep(velocity)
 	## Define a turn speed (radians per second)
 	var turn_speed: float = 3.0

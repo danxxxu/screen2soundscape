@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://banloe8guvh8w"]
+[gd_scene load_steps=7 format=3 uid="uid://banloe8guvh8w"]
 
 [ext_resource type="Script" path="res://src/player.gd" id="1_q2squ"]
 [ext_resource type="AudioStream" uid="uid://c5auq72sbv3sh" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
 [ext_resource type="AudioStream" uid="uid://bhrnaunq5c1lj" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
+[ext_resource type="AudioStream" uid="uid://bi3fen36mf8ov" path="res://assets/audio/sliding.mp3" id="4_tna46"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 
@@ -36,3 +37,6 @@ volume_db = -18.024
 
 [node name="Timer" type="Timer" parent="."]
 one_shot = true
+
+[node name="sliding_audio" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("4_tna46")

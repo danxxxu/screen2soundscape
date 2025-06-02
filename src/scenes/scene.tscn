@@ -123,5 +123,5 @@ transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("4_u6vwu")
 volume_db = -15.89
 
-[node name="Buildings" type="Node3D" parent="."]
+[node name="Buildings" type="Node3D" parent="." groups=["buildings"]]
 script = ExtResource("6_build")

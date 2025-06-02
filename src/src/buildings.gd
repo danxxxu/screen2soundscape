@@ -285,6 +285,10 @@ func create_buildings():
 			collision_body.add_child(collision_shape)
 			building.add_child(collision_body)
 			
+			# Add the building to the buildings group
+			collision_body.add_to_group("buildings")
+			print("Added building to group: ", collision_body.name)
+			print("Building groups: ", collision_body.get_groups())
 			
 			# Add the building to the container
 			buildings_container.add_child(building) 
