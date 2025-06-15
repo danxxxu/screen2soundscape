@@ -6,9 +6,9 @@ class_name MapUtils
 # Map dimensions
 const MAP_SIZE = Vector3(1000, 0, 1000)
 const GRID_STEP = 5.0
-
-const CENTER_LAT = 51.5887608
-const CENTER_LON = 4.7754033
+const center = Vector2(51.589286, 4.780329)
+const CENTER_LAT = center.x
+const CENTER_LON = center.y
 
 # Scale factor to convert degrees to local units
 const SCALE_FACTOR = 200

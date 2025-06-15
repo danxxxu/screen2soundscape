@@ -1,10 +1,9 @@
-[gd_scene load_steps=8 format=3 uid="uid://banloe8guvh8w"]
+[gd_scene load_steps=7 format=3 uid="uid://banloe8guvh8w"]
 
 [ext_resource type="Script" path="res://src/player.gd" id="1_q2squ"]
 [ext_resource type="AudioStream" uid="uid://c5auq72sbv3sh" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
 [ext_resource type="AudioStream" uid="uid://bhrnaunq5c1lj" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
-[ext_resource type="AudioStream" uid="uid://bi3fen36mf8ov" path="res://assets/audio/sliding.mp3" id="4_tna46"]
-[ext_resource type="AudioStream" uid="uid://bi3fen36mf8ov" path="res://assets/audio/boundaries/wall.mp3" id="5_wall"]
+[ext_resource type="AudioStream" uid="uid://bi3fen36mf8ov" path="res://assets/audio/sliding.mp3" id="5_wall"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 
@@ -43,11 +42,11 @@ one_shot = true
 one_shot = true
 
 [node name="sliding_audio" type="AudioStreamPlayer3D" parent="."]
-stream = ExtResource("4_tna46")
+stream = ExtResource("5_wall")
 
 [node name="wall_audio" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("5_wall")
-volume_db = -10
+volume_db = -10.0
 
 [node name="rotate_audio" type="AudioStreamPlayer3D" parent="."]
-volume_db = -10
+volume_db = -10.0
