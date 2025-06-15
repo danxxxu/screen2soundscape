@@ -120,7 +120,6 @@ func _setup_place_data():
 
 func _on_area_3d_body_entered(body):
 	if body.name == "Player" and place_data:
-		# Announce place name and type
 		var announcement = ''
 		if place_data.type != "unknown":
 			announcement += place_data.type + " "

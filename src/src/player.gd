@@ -1,8 +1,8 @@
 extends CharacterBody3D
 
 # How fast the player moves in meters per second.
-@export var speed = 50
-#@export var speed = 14
+#@export var speed = 50
+@export var speed = 14
 # The downward acceleration when in the air, in meters per second squared.
 @export var fall_acceleration = 75
 
@@ -15,12 +15,16 @@ var target_velocity = Vector3.ZERO
 @onready var target2 := $"../RainTarget"
 @onready var currentTarget := target
 @onready var sliding_audio := $sliding_audio
+@onready var wall_audio := $wall_audio
+@onready var zero_velocity_timer := $zero_velocity_timer
+@onready var rotate_audio := $rotate_audio
 
 var min_distance: float = 5.0  # Closest distance (highest pitch)
 var max_distance: float = 300.0 # Farthest distance (lowest pitch)
 var base_pitch: float   = 1.0     # Default pitch at mid-range
 var min_pitch: float    = 0.5      # Lowest pitch
 var max_pitch: float    = 2.0      # Highest pitch
+var pitch_range: float = 0.5  # How much the pitch can vary
 
 #preload different footstep sounds, still working on it 
 #const footstep_grass = preload("res://sounds/footsteps/footstep_grass.wav")
@@ -28,6 +32,8 @@ var max_pitch: float    = 2.0      # Highest pitch
 
 var _movement_enabled: bool = true
 var is_sliding: bool = false
+var was_moving: bool = false
+var current_rotation: float = 0.0
 
 func set_movement_enabled(enabled: bool):
 	_movement_enabled = enabled
@@ -69,11 +75,9 @@ func update_pitch(distance):
 
 
 func _ready():
-#	pass
-#	Speaker.speak(" Bonjour ! Vous êtes à la Grand-Place 32, face au nord. Trouvez le supermarché Spar le plus proche. Explorez vers l'est. Pour vous déplacer, utilisez Z, Q, S, D. Pour tourner, utilisez les flèches gauche et droite. Quand vous entendez le nom de l'endroit, arrêtez-vous. Appuyez sur Entrée et tapez le mot adresse. Appuyez à nouveau sur Entrée pour entendre l'adresse.", "fr")
 	var current_place = "the Kerkplein"
 	var to_find = "Cafe Dok 19"
-	Speaker.speak(" Hello ! You are at " + current_place + " facing north. Find " + to_find + ". Press shift to hear the proximity sensor to the search place. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.")
+	#	Speaker.speak(" Hello ! You are at " + current_place + " facing north. Find " + to_find + ". Press shift to hear the proximity sensor to the search place. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.", "fr")
 
 	# Load the sliding sound
 	var sliding_sound = load("res://assets/sounds/sliding.mp3")
@@ -83,11 +87,32 @@ func _ready():
 	else:
 		push_error("Could not load sliding.mp3 sound file")
 		
+	# Load the wall hit sound
+	var wall_sound = load("res://assets/audio/boundaries/wall.mp3")
+	if wall_sound:
+		wall_audio.stream = wall_sound
+		wall_audio.volume_db = -10  # Adjust volume as needed
+	else:
+		push_error("Could not load wall.mp3 sound file")
+		
+	# Load the rotation sound
+	var rotate_sound = load("res://assets/audio/rotate.wav")
+	if rotate_sound:
+		rotate_audio.stream = rotate_sound
+		rotate_audio.volume_db = -10  # Adjust volume as needed
+	else:
+		push_error("Could not load rotate.wav sound file")
+		
 	# Connect collision signals
 	print("Connecting collision signals...")
 	connect("body_entered", _on_body_entered)
 	connect("body_exited", _on_body_exited)
 	print("Collision signals connected")
+	
+	# Setup zero velocity timer
+	zero_velocity_timer.one_shot = true
+	zero_velocity_timer.wait_time = 0.2  # Half a second
+	zero_velocity_timer.timeout.connect(_on_zero_velocity_timeout)
 
 func _on_body_entered(body):
 	print("Body entered signal received")
@@ -96,7 +121,7 @@ func _on_body_entered(body):
 	if body.is_in_group("buildings"):
 		is_sliding = true
 		print("Entered building collision")
-		if not sliding_audio.playing:
+		if not sliding_audio.playing and velocity.length() > 0:
 			sliding_audio.play()
 	else:
 		print("Body is not in buildings group")
@@ -111,6 +136,11 @@ func _on_body_exited(body):
 		sliding_audio.stop()
 	else:
 		print("Body is not in buildings group")
+
+func _on_zero_velocity_timeout():
+	if is_on_wall() and Input.is_action_pressed("move_forward"):
+		if not wall_audio.playing:
+			wall_audio.play()
 
 func _physics_process(delta):
 	if not _movement_enabled:
@@ -131,30 +161,49 @@ func _physics_process(delta):
 	move_and_slide()
 	
 	# Play sliding sound when touching walls
-	if is_on_wall():
-		if not sliding_audio.playing:
-			sliding_audio.play()
+	if is_on_wall() and Input.is_action_pressed("move_forward"):
+		print(velocity)
+		if velocity.length() > 0:
+			if not sliding_audio.playing:
+				sliding_audio.play()
+			else:
+				wall_audio.stop()
+				zero_velocity_timer.stop()
+		else:
+			sliding_audio.stop()
+			if not wall_audio.playing and zero_velocity_timer.is_stopped():
+				zero_velocity_timer.start()
 	else:
 		sliding_audio.stop()
-	
-	# Debug collision state
-	if get_slide_collision_count() > 0:
-		for i in range(get_slide_collision_count()):
-			var collision = get_slide_collision(i)
-			var collider = collision.get_collider()
-			print("Colliding with: ", collider.name)
-			print("Collider groups: ", collider.get_groups())
+		wall_audio.stop()
+		zero_velocity_timer.stop()
 	
 	footstep(velocity)
-	## Define a turn speed (radians per second)
+	
+	# Handle rotation
 	var turn_speed: float = 3.0
-
-	# Check for turn actions
+	var rotation_amount = 0.0
+	
 	if Input.is_action_pressed("turn_left"):
-		neck.rotate_y(turn_speed * delta)
+		rotation_amount = turn_speed * delta
+		neck.rotate_y(rotation_amount)
 	elif Input.is_action_pressed("turn_right"):
-		neck.rotate_y(-turn_speed * delta)
-
+		rotation_amount = -turn_speed * delta
+		neck.rotate_y(rotation_amount)
+		
+	# Update rotation sound
+	if rotation_amount != 0:
+		neck.rotate_y(rotation_amount)
+		if not rotate_audio.playing:
+			rotate_audio.play()
+		
+		# Calculate pitch based on absolute direction (North = 0, South = 1)
+		# Get the current rotation in radians and normalize it
+		var current_angle = fmod(neck.rotation.y + PI, TAU)  # Add PI to make North = 0
+		rotate_audio.pitch_scale = current_angle / TAU
+	else:
+		if rotate_audio.playing:
+			rotate_audio.stop()
 
 # footstep sounds
 func footstep(vel):
