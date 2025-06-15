@@ -199,8 +199,11 @@ func _physics_process(delta):
 		
 		# Calculate pitch based on absolute direction (North = 0, South = 1)
 		# Get the current rotation in radians and normalize it
-		var current_angle = fmod(neck.rotation.y + PI, TAU)  # Add PI to make North = 0
-		rotate_audio.pitch_scale = current_angle / TAU
+		var current_angle = fmod(neck.rotation.y, TAU)  # Keep between 0 and TAU
+		if current_angle < 0:
+			current_angle += TAU  # Make sure it's positive
+		# Map the angle (0 to TAU) to pitch range (1 to 2 and back to 1)
+		rotate_audio.pitch_scale = lerp(1.5, 2.0, sin(current_angle))
 	else:
 		if rotate_audio.playing:
 			rotate_audio.stop()
