@@ -228,7 +228,6 @@ func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
 
 	# ---------- normals ----------
 	st.generate_normals()      # per-face normals (flat) because duplicates still exist
-	# st.index()               # OPTIONAL: call *after* normals if you really need welding
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = st.commit()
