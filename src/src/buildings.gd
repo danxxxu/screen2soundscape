@@ -233,7 +233,36 @@ func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
 	mesh_instance.mesh = st.commit()
 	return mesh_instance
 
-
+func add_building_proximity(building_points: Array, building: MeshInstance3D) -> Area3D:
+	# Add proximity detection area (10 units larger than the building)
+	var proximity_area = Area3D.new()
+	var proximity_shape = CollisionShape3D.new()
+	
+	# Create a convex shape from the building points with padding
+	var padded_points = []
+	var center = Vector2()
+	for p in building_points:
+		center += p
+	center /= building_points.size()
+	
+	# Expand each point outward from center by 10 units
+	for p in building_points:
+		var direction = (p - center).normalized()
+		var padded_point = p + direction * 10.0  # 10 unit padding
+		padded_points.append(Vector2(padded_point.x, padded_point.y))
+	
+	# Create the proximity detection shape
+	var proximity_building = create_extruded_polygon(padded_points, EXTRUDE_HEIGHT + 2.0)
+	var proximity_collision_shape = proximity_building.mesh.create_trimesh_shape()
+	proximity_shape.shape = proximity_collision_shape
+	
+	proximity_area.add_child(proximity_shape)
+	building.add_child(proximity_area)
+	
+	# Add the proximity area to the building_proximity group
+	proximity_area.add_to_group("building_proximity")
+	
+	return proximity_area
 
 func create_buildings():
 	if not building_data.has("elements"):
@@ -274,7 +303,7 @@ func create_buildings():
 			var building = create_extruded_polygon(building_points, EXTRUDE_HEIGHT)
 			building.material_override = building_material
 
-			# Add collision shape
+			# Add collision shape for physics
 			var collision_body = StaticBody3D.new()
 			var collision_shape = CollisionShape3D.new()
 
@@ -286,6 +315,9 @@ func create_buildings():
 			
 			# Add the building to the buildings group
 			collision_body.add_to_group("buildings")
+
+			# Add proximity detection using the extracted method
+			add_building_proximity(building_points, building)
 
 			# Add the building to the container
 			buildings_container.add_child(building) 

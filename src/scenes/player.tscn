@@ -50,3 +50,6 @@ volume_db = -10.0
 
 [node name="rotate_audio" type="AudioStreamPlayer3D" parent="."]
 volume_db = -10.0
+
+[node name="houses_audio" type="AudioStreamPlayer3D" parent="."]
+volume_db = -10.0
