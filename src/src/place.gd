@@ -2,6 +2,11 @@
 extends Node3D
 class_name Place
 const PlaceData = preload("res://src/models/Place.gd")
+
+# Signals for player interaction - much better than direct parent calls!
+signal player_entered(place: Place)
+signal player_exited(place: Place)
+
 var place_data = null
 var mesh_instance: MeshInstance3D
 var audio_player: AudioStreamPlayer3D
@@ -17,17 +22,9 @@ func _ready():
 	area = $Area3D
 	label = $MeshInstance3D/Label3D
 
-	# Connect area signals to scene
-	var scene = get_tree().get_root().get_node("Scene")
-	if scene:
-		area.body_entered.connect(
-			func(body):
-				if body.name == "Player":
-					scene._on_place_entered(self))
-		area.body_exited.connect(
-			func(body):
-				if body.name == "Player":
-					scene._on_place_exited(self))
+	# Connect area signals to our own signal handlers - no more direct parent calls!
+	area.body_entered.connect(_on_area_3d_body_entered)
+	area.body_exited.connect(_on_area_3d_body_exited)
 
 	# If we already have place_data, set it up now that we're ready
 	if place_data:
@@ -127,6 +124,7 @@ func _on_area_3d_body_entered(body):
 		Speaker.speak(announcement)
 		if audio_player.stream:
 			audio_player.play()
+		emit_signal("player_entered", self)
 
 
 func _on_area_3d_body_exited(body):
@@ -134,3 +132,4 @@ func _on_area_3d_body_exited(body):
 		Speaker.stop_speaking()
 		if audio_player.playing:
 			audio_player.stop()
+		emit_signal("player_exited", self)
