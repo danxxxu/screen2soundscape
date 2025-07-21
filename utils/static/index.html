@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>OSM Voice Assistant</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2em auto; }
+    textarea { width: 100%; height: 100px; }
+    button { padding: 0.5em 1em; }
+    #response { margin-top: 1em; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>OSM Assistant</h1>
+  <textarea id="question" placeholder="Type your question…"></textarea><br/>
+  <button onclick="ask()">Ask</button>
+  <div id="response"></div>
+
+  <script>
+    async function ask() {
+      const q = document.getElementById("question").value;
+      document.getElementById("response").textContent = "…thinking…";
+      try {
+        const res = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        document.getElementById("response").textContent = data.answer;
+      } catch (e) {
+        document.getElementById("response").textContent = "Error: " + e;
+      }
+    }
+  </script>
+</body>
+</html>
