@@ -4,8 +4,6 @@ extends Node3D
 const PlaceData = preload("res://src/models/Place.gd")
 
 var place_data_models: Array[PlaceData] = []
-var place_meshes: Array[PackedScene] = []
-var place_sounds: Array[AudioStream] = []
 
 func _ready():
 	if Engine.is_editor_hint():
@@ -114,12 +112,6 @@ func load_places_from_overpass(lat1: float, lon1: float, lat2: float, lon2: floa
 				place.x = adjusted_coords.x
 				place.z = -adjusted_coords.y
 
-				# Assign random mesh
-				if place_meshes.size() > 0:
-					place.mesh = place_meshes[randi() % place_meshes.size()]
-				if place_sounds.size() > 0:
-					place.sound = place_sounds[randi() % place_sounds.size()]
-
 				place_data_models.append(place)
 
 func adjust_place_position(place_pos: Vector2) -> Vector2:
@@ -226,8 +218,3 @@ func _on_place_exited(place: Place):
 	var scene = get_parent()
 	if scene and scene.has_method("_on_place_exited"):
 		scene._on_place_exited(place)
-
-# Set mesh and sound arrays (to be called from parent scene)
-func set_place_assets(meshes: Array[PackedScene], sounds: Array[AudioStream]):
-	place_meshes = meshes
-	place_sounds = sounds 

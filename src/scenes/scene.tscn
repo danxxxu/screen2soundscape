@@ -1,12 +1,13 @@
-[gd_scene load_steps=17 format=3 uid="uid://cwrxsfnvowad6"]
+[gd_scene load_steps=18 format=3 uid="uid://cwrxsfnvowad6"]
 
-[ext_resource type="Script" path="res://src/places.gd" id="1_5vouw"]
+[ext_resource type="Script" path="res://src/buildings.gd" id="1_buildings"]
 [ext_resource type="AudioStream" uid="uid://d21tjv3cyi4b2" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
+[ext_resource type="Script" path="res://src/places.gd" id="1_places"]
+[ext_resource type="Script" path="res://src/scene.gd" id="1_scene"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://scenes/player.tscn" id="2_lveax"]
 [ext_resource type="Texture2D" uid="uid://dcr1a2if65q1y" path="res://assets/images/rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
 [ext_resource type="AudioStream" uid="uid://dpdbytt4atqal" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://cyxe536c4i73x" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
-[ext_resource type="Script" path="res://src/buildings.gd" id="6_build"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -39,7 +40,7 @@ size = Vector3(1000, 1, 1000)
 [sub_resource type="BoxMesh" id="BoxMesh_jkbgw"]
 
 [node name="Scene" type="Node3D"]
-script = ExtResource("1_5vouw")
+script = ExtResource("1_scene")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_7sdms")
@@ -102,7 +103,7 @@ shape = SubResource("BoxShape3D_a6j3j")
 transform = Transform3D(0.999951, -0.00327844, 0.00930878, 0.00320079, 0.99996, 0.00834572, -0.00933577, -0.00831553, 0.999922, -69.27, 5, -22.784)
 
 [node name="Target" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -304.035, 1.49031, -133.52)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.49903, 1.49031, 41.1938)
 visible = false
 mesh = SubResource("BoxMesh_jkbgw")
 skeleton = NodePath("AudioStreamPlayer3D")
@@ -117,7 +118,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0213, 1.49, 8.5704)
 visible = false
 mesh = SubResource("BoxMesh_jkbgw")
 skeleton = NodePath("AudioStreamPlayer3D2")
-script = ExtResource("1_5vouw")
 
 [node name="AudioStreamPlayer3D2" type="AudioStreamPlayer3D" parent="RainTarget"]
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
@@ -125,4 +125,7 @@ stream = ExtResource("4_u6vwu")
 volume_db = -15.89
 
 [node name="Buildings" type="Node3D" parent="." groups=["buildings"]]
-script = ExtResource("6_build")
+script = ExtResource("1_buildings")
+
+[node name="Places" type="Node3D" parent="."]
+script = ExtResource("1_places")

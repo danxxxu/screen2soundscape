@@ -1,30 +1,18 @@
 extends Node3D
-"res://rocky_terrain_02_diff_4k.jpg"
-@export var map_size: Vector3 = Vector3(1000, 0, 1000) # Map size in local units
-@export var place_meshes: Array[PackedScene] # Assign random meshes in the editor
-@export var place_sounds: Array[AudioStream] # Assign random sounds in the editor
 
 var command_mode: bool = false
 var current_command: String = ""
 var command_label: Label
-var current_place: Node3D = null  # Store the current place player is near
-var player: Node3D = null  # Reference to the player node
+var current_place: Node3D = null 
+var player: Node3D = null
 
 func _ready():
-	# Create command label
 	command_label = Label.new()
 	command_label.position = Vector2(15, 300)  # Position below existing HUD
 	command_label.visible = false
 	$HUD.add_child(command_label)
 	update_command_label()
-
-	# Get reference to player node
 	player = get_node("Player")
-	
-	# Set up places component with assets
-	var places_node = get_node("Places")
-	if places_node and places_node.has_method("set_place_assets"):
-		places_node.set_place_assets(place_meshes, place_sounds)
 
 
 func update_command_label():
