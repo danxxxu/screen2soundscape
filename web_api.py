@@ -1,6 +1,6 @@
 # web_api.py
 from flask import Flask, request, jsonify, send_from_directory
-from assistant_core import handle_question
+from run_assistant_core import handle_question
 
 app = Flask(__name__, static_folder="static", template_folder="static")
 
