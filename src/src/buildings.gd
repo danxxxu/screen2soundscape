@@ -3,7 +3,7 @@ extends Node3D
 
 const EXTRUDE_HEIGHT = 10.0  # Height of the extruded path
 var building_data = {}
-var node_data = {}  # Store node coordinates
+var node_data = {} 
 var building_material: StandardMaterial3D
 
 func _ready():
@@ -11,19 +11,19 @@ func _ready():
 		# Clear existing children when in editor
 		for child in get_children():
 			child.queue_free()
+	# belgium
+	const location = [51.58853722988234, 4.779177373402243, 51.59037977578852, 4.78199061828104]
+	# nl
+	#const location = [51.586457, 4.772471,51.59010181869865, 4.779824262314036]
 	
-	load_buildings()
+	var lat1 = location[0]
+	var lon1 = location[1]
+	var lat2 = location[2]
+	var lon2 = location[3]
+	
+	await query_buildings_from_overpass(lat1, lon1, lat2, lon2)
 	create_materials()
 	create_buildings()
-	
-	#test
-	#create_extruded_polygon([
-		#Vector2(10, 4),
-		#Vector2(-10, 4),
-		#Vector2(10, -4),
-		#Vector2(-10, -4),
-		#], 10)
-	#
 
 func _process(_delta):
 	if Engine.is_editor_hint():
@@ -31,25 +31,50 @@ func _process(_delta):
 		if Input.is_action_just_pressed("ui_accept"):  # Space bar
 			_ready()
 
-func load_buildings():
-	var file = FileAccess.open("res://src/models/buildings.json", FileAccess.READ)
-	if file:
-		var json = JSON.new()
-		var error = json.parse(file.get_as_text())
-		if error == OK:
-			building_data = json.get_data()
-			# First, collect all node coordinates
-			for element in building_data.elements:
-				if element.type == "node":
-					node_data[element.id] = {
-						"lat": element.lat,
-						"lon": element.lon
-					}
-			print('Loaded buildings', building_data.elements.size())	
-		else:
-			print("JSON Parse Error: ", json.get_error_message())
+# Method to query buildings for a specific area using real world coordinates
+func query_buildings_with_bounds(lat1: float, lon1: float, lat2: float, lon2: float):
+	"""
+	Public method to query buildings from Overpass API with lat/lon bounding box
+	lat1, lon1: First corner of bounding box
+	lat2, lon2: Second corner of bounding box
+	"""
+	# Clear existing buildings
+	for child in get_children():
+		if child.name == "Buildings":
+			child.queue_free()
+	
+	# Clear existing data
+	building_data = {}
+	node_data = {}
+	
+	await query_buildings_from_overpass(lat1, lon1, lat2, lon2)
+	create_materials()
+	create_buildings()
+
+func query_buildings_from_overpass(lat1: float, lon1: float, lat2: float, lon2: float):
+	"""
+	Query buildings from Overpass API using the OverpassAPI class
+	"""
+	print("🌐 Querying buildings from Overpass API...")
+	
+	# Create OverpassAPI instance
+	var overpass_api = OverpassAPI.new()
+	add_child(overpass_api)
+	
+	# Query the API
+	var result = await overpass_api.query_buildings(lat1, lon1, lat2, lon2)
+	
+	# Extract results
+	building_data = result.get("building_data", {})
+	node_data = result.get("node_data", {})
+	
+	# Clean up
+	overpass_api.queue_free()
+	
+	if building_data.is_empty() or not building_data.has("elements"):
+		print("❌ No building data received from Overpass API")
 	else:
-		print("Failed to open buildings.json")
+		print("✅ Successfully loaded building data from Overpass API")
 
 func create_materials():
 	# Building material

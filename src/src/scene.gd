@@ -96,61 +96,100 @@ func find_nearest_point_on_perimeter(point: Vector2, building_points: Array) -> 
 		"distance": min_dist
 	}
 
-func load_places_from_json() -> void:
-	var file = FileAccess.open("res://src/models/places.json", FileAccess.READ)
-	if file:
-		var json_text = file.get_as_text()
-		var json = JSON.parse_string(json_text)
-		if json and json.has("elements"):
-			for element in json["elements"]:
-				if element["type"] == "node" and element.has("tags"):
-					var place = PlaceData.new()
+func load_places_from_overpass(lat1: float, lon1: float, lat2: float, lon2: float) -> void:
+	"""
+	Load places from Overpass API using the same coordinates as buildings
+	"""
+	print("🏪 Loading places from Overpass API...")
+	
+	# Create OverpassAPI instance
+	var overpass_api = OverpassAPI.new()
+	add_child(overpass_api)
+	
+	# Query places from API
+	var result = await overpass_api.query_places(lat1, lon1, lat2, lon2)
+	var places_data = result.get("places_data", {})
+	
+	# Clean up
+	overpass_api.queue_free()
+	
+	if places_data.has("elements"):
+		for element in places_data["elements"]:
+			if element["type"] == "node" and element.has("tags"):
+				var place = PlaceData.new()
 
-					# Store all tags
-					place.tags = element["tags"].duplicate()
+				# Store all tags
+				place.tags = element["tags"].duplicate()
 
-					# Get name and type
-					place.name = element["tags"].get("name", "Unnamed Place")
+				# Get name and type
+				place.name = element["tags"].get("name", "Unnamed Place")
 
-					# Determine type from tags
-					var type = "unknown"
-					var category = "unknown"
-					if element["tags"].has("amenity"):
-						type = element["tags"]["amenity"]
-						category = "amenity"
-					elif element["tags"].has("shop"):
-						type = element["tags"]["shop"]
-						category = "shop"
-					elif element["tags"].has("tourism"):
-						type = element["tags"]["tourism"]
-						category = "tourism"
-					elif element["tags"].has("leisure"):
-						type = element["tags"]["leisure"]
-						category = "leisure"
-					elif element["tags"].has("railway"):
-						type = element["tags"]["railway"]
-						category = "railway"
-					place.type = type
-					place.category = category
+				# Determine type from tags
+				var type = "unknown"
+				var category = "unknown"
+				if element["tags"].has("amenity"):
+					type = element["tags"]["amenity"]
+					category = "amenity"
+				elif element["tags"].has("shop"):
+					type = element["tags"]["shop"]
+					category = "shop"
+				elif element["tags"].has("tourism"):
+					type = element["tags"]["tourism"]
+					category = "tourism"
+				elif element["tags"].has("leisure"):
+					type = element["tags"]["leisure"]
+					category = "leisure"
+				elif element["tags"].has("railway"):
+					type = element["tags"]["railway"]
+					category = "railway"
+				place.type = type
+				place.category = category
 
-					# Convert coordinates
-					var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
+				# Convert coordinates
+				var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
 
-					# Adjust position to be on building perimeter if needed
-					var adjusted_coords = adjust_place_position(Vector2(local_coords.x, local_coords.y))
-					place.x = adjusted_coords.x
-					place.z = -adjusted_coords.y
+				# Adjust position to be on building perimeter if needed
+				var adjusted_coords = adjust_place_position(Vector2(local_coords.x, local_coords.y))
+				place.x = adjusted_coords.x
+				place.z = -adjusted_coords.y
 
-					# Assign random mesh
-					if place_meshes.size() > 0:
-						place.mesh = place_meshes[randi() % place_meshes.size()]
-					if place_sounds.size() > 0:
-						place.sound = place_sounds[randi() % place_sounds.size()]
+				# Assign random mesh
+				if place_meshes.size() > 0:
+					place.mesh = place_meshes[randi() % place_meshes.size()]
+				if place_sounds.size() > 0:
+					place.sound = place_sounds[randi() % place_sounds.size()]
 
-					place_scenes.append(place)
+				place_scenes.append(place)
+		print("✅ Processed ", place_scenes.size(), " places from Overpass API")
+	else:
+		print("❌ No places data received from Overpass API")
 
 func _ready():
-	load_places_from_json()
+	# Wait for buildings to be created from Overpass API before loading places
+	await get_tree().process_frame
+	await get_tree().process_frame  # Extra frame to ensure buildings node exists
+	
+	# Wait for buildings to be fully loaded (check if Buildings node has children)
+	var buildings_node = get_node("Buildings")
+	if buildings_node:
+		# Wait until buildings are actually created
+		var max_wait = 100  # Maximum wait cycles
+		var wait_count = 0
+		while buildings_node.get_child_count() == 0 and wait_count < max_wait:
+			await get_tree().process_frame
+			wait_count += 1
+		print("🏗️ Buildings loaded, now loading places...")
+
+	const location = [51.58853722988234, 4.779177373402243, 51.59037977578852, 4.78199061828104]
+	# nl
+	#const location = [51.586457, 4.772471,51.59010181869865, 4.779824262314036]
+	
+	var lat1 = location[0]
+	var lon1 = location[1]
+	var lat2 = location[2]
+	var lon2 = location[3]
+	
+	await load_places_from_overpass(lat1, lon1, lat2, lon2)
 	print("Generating", place_scenes.size(), "places...")
 
 	# Create command label
@@ -175,6 +214,37 @@ func _ready():
 		)
 
 		add_child(place_instance)
+
+# Method to query buildings for a specific area using real world coordinates
+func query_buildings_for_area(lat1: float, lon1: float, lat2: float, lon2: float):
+	"""
+	Query buildings from Overpass API for a specific area using lat/lon coordinates
+	lat1, lon1: First corner of bounding box
+	lat2, lon2: Second corner of bounding box
+	"""
+	var buildings_script = get_node("Buildings")
+	if buildings_script and buildings_script.has_method("query_buildings_with_bounds"):
+		await buildings_script.query_buildings_with_bounds(lat1, lon1, lat2, lon2)
+		print("🏗️ Buildings updated, reloading places...")
+		
+		# Clear existing places
+		for child in get_children():
+			if child is Place:
+				child.queue_free()
+		
+		# Reload places with new building data using the same coordinates
+		place_scenes.clear()
+		await load_places_from_overpass(lat1, lon1, lat2, lon2)
+		
+		# Recreate place instances
+		for place_data in place_scenes:
+			var scene = load("res://scenes/Place.tscn")
+			var place_instance = scene.instantiate()
+			place_instance.set_place_data(place_data)
+			place_instance.position = Vector3(place_data.x, 0, place_data.z)
+			add_child(place_instance)
+	else:
+		print("❌ Cannot query buildings - Buildings node not found or method missing")
 
 func update_command_label():
 	if command_mode:
