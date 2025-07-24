@@ -109,6 +109,19 @@ def parse_question(raw_q, lat=None, lon=None):
         "place_name": None, "loc_source": None
     }
 
+    # inject tags for cafes
+    if "coffee" in q.lower() and "shop" in q.lower():
+        P.update({"tag_key": "amenity", "tag_value": "cafe"})
+
+    if lat is not None and lon is not None:
+        P["center"] = (lat, lon)
+        P["loc_source"] = "fallback_coords"
+        P["place_name"] = "user_location"
+        print(f"📍 Using fallback coordinates: ({lat}, {lon})")
+        P["mode"] = "generic"
+        print(f"🕒 parse_question took {time.time() - t0:.2f}s")
+        return P
+
     candidates = [ent.text for ent in doc.ents if ent.label_ in {"GPE", "LOC", "FAC", "ORG"}]
     regex_match = re.search(r"(?:in|near|around|by)\s+(.+)", q, re.IGNORECASE)
     if regex_match:
@@ -153,12 +166,6 @@ def parse_question(raw_q, lat=None, lon=None):
                         continue
         except Exception as e:
             print(f"⚠️ LLaMA extraction failed: {e}")
-
-    if not P["center"] and lat is not None and lon is not None:
-        P["center"] = (lat, lon)
-        P["loc_source"] = "fallback_coords"
-        P["place_name"] = "user_location"
-        print(f"📍 Using fallback coordinates: ({lat}, {lon})")
 
     if not P["center"]:
         P["center"] = (27.9881, 86.9250)
@@ -212,7 +219,9 @@ def build_overpass_query(P):
             lat, lon = P["center"]
             radius = P["radius"]
             query = overpassQueryBuilder(
-                bbox=(lat, lon, radius),
+                around=radius,
+                lat=lat,
+                lon=lon,
                 elementType=["node", "way", "relation"],
                 out="body",
                 includeGeometry=False,
