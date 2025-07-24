@@ -291,31 +291,41 @@ def parse_question(raw_q, lat=None, lon=None):
         "start_coords": None, "end_coords": None, "poi_coords": None
     }
 
-    # Step 1: Extract location
+    # Step 1: Extract location from text (NER, regex, etc.)
     apply_location_extraction(P, q, doc)
 
-    # Step 2: Apply specialized query types (like cuisine, route, etc.)
+    # Step 2: Specialized query types
     if apply_cuisine_query(P, q): return P
     if apply_route_query(P, q): return P
     if apply_special_filters(P, q): return P
 
-    # Step 3: Apply LLaMA fallback if no location
+    # Step 3: LLaMA fallback if nothing detected
     if not P.get("center"):
         apply_llama_fallback(P, raw_q)
 
-    # Step 4: Use lat/lon fallback if provided
-    if not P.get("center") and lat is not None and lon is not None:
-        P["center"] = [lat, lon]
-        P["mode"] = "generic"
-        P["radius"] = DEFAULT_RADIUS
-        P["loc_source"] = "user_coordinates"
-        print(f"📍 No location found in text. Using provided coordinates: {P['center']}")
+    # Step 4: Fallback to provided coordinates if no location found
+    if not P.get("center"):
+        if lat is not None and lon is not None:
+            P["center"] = [lat, lon]
+            P["mode"] = "generic"
+            P["radius"] = DEFAULT_RADIUS
+            P["loc_source"] = "user_coordinates"
+            print(f"📍 No location found in text. Using provided coordinates: {P['center']}")
+        else:
+            # Step 5: Fallback to Mount Everest
+            mount_everest = (27.9881, 86.9250)
+            P["center"] = list(mount_everest)
+            P["mode"] = "generic"
+            P["radius"] = DEFAULT_RADIUS
+            P["loc_source"] = "fallback_everest"
+            print("📍 No location or user coordinates provided. Falling back to Mount Everest.")
 
-    # Step 5: Generic fallback if center is set
+    # Step 6: Final generic fallback if center exists but no mode
     if P.get("center") and not P.get("mode"):
         P.update({"mode": "generic", "radius": DEFAULT_RADIUS})
 
     return P
+
 
 # def parse_question(raw_q, lat=None, lon=None):
 #     q = detect_and_translate(raw_q)

@@ -88,9 +88,9 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
             print(f"❌ Failed to get directions: {e}")
             return
 
-    if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
-        print("❌ Could not resolve a location from the question.")
-        return
+    # if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
+    #     print("❌ Could not resolve a location from the question.")
+    #     return
 
     # Step 3: Build Overpass query
     print("🕒 Step 3: Building Overpass QL query...")
