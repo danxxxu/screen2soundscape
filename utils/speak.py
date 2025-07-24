@@ -10,7 +10,9 @@ import logging
 import warnings
 import torch
 
-from whisper.whisper import model
+# m whisper.whisper import model
+import whisper
+model = whisper.load_model("base")
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 warnings.filterwarnings("ignore")
 torch._C._jit_set_profiling_mode(False)
