@@ -377,7 +377,7 @@ def parse_question_optimized(raw_q, lat=None, lon=None):
         P["center"] = coords
         P["place_name"] = loc
         P["loc_source"] = source
-        print(f"📍 Location "{loc}" via {source}")
+        print(f"📍 Location {loc} via {source}")
     
     # Step 6: Cuisine query check
     if apply_cuisine_query(P, q):
