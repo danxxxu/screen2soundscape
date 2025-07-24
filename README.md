@@ -51,8 +51,7 @@ Remove-Item checkpoints_v2_0417.zip
 ```bash
 mkdir models
 cd models
-curl -L -o llama-2-7b-chat.Q4_K_M.gguf \
-  https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf
+curl -L -o llama-2-7b-chat.Q4_K_M.gguf https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf
 ```
 
 ### 4. Install Python Dependencies
@@ -82,6 +81,15 @@ python -m spacy download en_core_web_sm
 > pip install git+https://github.com/openai/whisper.git
 > ```
 
+
+Install Open Voice:
+
+> ```bash
+apt update && apt install -y mecab libmecab-dev mecab-ipadic-utf8
+pip install git+https://github.com/myshell-ai/MeloTTS.git
+python -m unidic download
+> ```
+
 ### 5. System Requirements
 
 * **PortAudio** (for `sounddevice`)
@@ -100,6 +108,7 @@ python -m spacy download en_core_web_sm
 ```
 osm_voice_assistant/
 ├── run_assistant.py              # Main script to run the assistant
+├── models/
 ├── utils/
 │   ├── __init__.py
 │   ├── transcribe.py             # Record + transcribe speech to text (multilingual)

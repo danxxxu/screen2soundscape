@@ -6,6 +6,13 @@ import torch
 import torchaudio
 from pydub import AudioSegment
 import numpy as np
+import logging
+import warnings
+import torch
+
+warnings.filterwarnings("ignore")
+torch._C._jit_set_profiling_mode(False)
+torch._C._jit_set_profiling_executor(False)
 
 # Base path: project root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

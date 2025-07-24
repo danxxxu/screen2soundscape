@@ -55,7 +55,8 @@ def get_directions(start, end, mode="walk"):
     return response.json()
 
 
-def main(speaker, language, speed, save_json, text, text_file):
+def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=None):
+
     if not speaker:
         print("❌ You must specify a --speaker.")
         return
@@ -89,10 +90,14 @@ def main(speaker, language, speed, save_json, text, text_file):
         except Exception as e:
             print(f"❌ Failed to get directions: {e}")
             return
-    else:
-        if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
+    if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
+        if lat is not None and lon is not None:
+            params["center"] = [lat, lon]
+            print(f"📍 Using provided coordinates as center: {params['center']}")
+        else:
             print("❌ Could not resolve a location from the question.")
             return
+
 
         # Step 3: Build Overpass query
         print("🕒 Step 3: Building Overpass QL query...")
@@ -165,6 +170,9 @@ if __name__ == "__main__":
     parser.add_argument("--save-json", action="store_true", help="Save raw Overpass results to JSON")
     parser.add_argument("--text", type=str, help="Provide a question as text input instead of recording")
     parser.add_argument("--text-file", type=str, help="Provide a question via a text file instead of recording")
+    parser.add_argument("--lat", type=float, help="Latitude of the current user location")
+    parser.add_argument("--lon", type=float, help="Longitude of the current user location")
+
 
     args = parser.parse_args()
     main(
@@ -173,8 +181,11 @@ if __name__ == "__main__":
         speed=args.speed,
         save_json=args.save_json,
         text=args.text,
-        text_file=args.text_file
+        text_file=args.text_file,
+        lat=args.lat,
+        lon=args.lon
     )
+
 
 # # Example usage:
 # python run_assistant.py --speaker arnold --language EN_NEWEST --speed 1.0
@@ -182,6 +193,7 @@ if __name__ == "__main__":
 # python run_assistant.py --speaker arnold --text "Are there any pet-friendly hotels in Zurich?"
 # python run_assistant.py --speaker arnold --text "Y a-t-il des restaurants végétaliens à Lyon ?"
 # python run_assistant.py --speaker arnold --text "Où se trouve le marché aux puces à Paris ?"
+# python run_assistant.py --speaker arnold --text "Are there any coffee shops nearby?" --lat 50.6683 --lon 4.6156
 
 # python run_assistant.py --speaker arnold --text "Where can I get my nails at a beauty salon done in louvain la neuve?"
 # python run_assistant.py --speaker arnold --text "How can I get from 302 hutchinson blvd, mount vernon, to times square?"
