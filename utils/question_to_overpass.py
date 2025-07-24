@@ -12,6 +12,9 @@ import string
 from geoparser import Geoparser
 import contextlib, io
 from utils.llama_singleton import get_llm
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 @lru_cache()
 def get_llm():
