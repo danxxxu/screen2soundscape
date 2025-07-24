@@ -401,69 +401,55 @@ def parse_question(raw_q, lat=None, lon=None):
     return P
 
 
+from OSMPythonTools.overpass import Overpass, overpassQueryBuilder
+from OSMPythonTools.nominatim import Nominatim as OSMToolsNominatim
 
+_osm_overpass = Overpass()
+_osm_nominatim = OSMToolsNominatim()
 
 def build_overpass_query(P):
-    tag_f = f'["{P["tag_key"]}"="{P["tag_value"]}"]' if P.get("tag_key") else ""
-    extra_tag = P.get("extra_tag", "")
-    wh_f = '["wheelchair"="yes"]' if P.get("wheelchair_only") else ""
-    pet_f = '["pets"="yes"]' if P.get("pet_friendly") else ""
-    open_f = f'["opening_hours"~"{P.get("opening_hours_regex")}"]' if P.get("opening_hours_regex") else ""
-
-    filters = f"{extra_tag}{tag_f}{wh_f}{pet_f}{open_f}"
-
-    # Limit results to avoid slow queries
-    out_limit = "out center 20;"  # Top 20 results max
-
     if P.get("mode") == "boundary_lookup":
-        name = P["place_name"]
-        return (
-            f'[out:json][timeout:20];'
-            f'relation["boundary"="administrative"]["name"="{name}"]'
-            '["admin_level"~"^(8|6|4)$"];out body;>;out skel qt;'
+        area_name = P["place_name"]
+        return _osm_overpass.query(
+            f'relation["boundary"="administrative"]["name"="{area_name}"]["admin_level"~"^(8|6|4)$"];out body;>;out skel qt;'
         )
 
-    elif P.get("mode") in ("route_check", "route_via"):
-        s_coords, e_coords = P["start_coords"], P["end_coords"]
-        lat1, lon1 = s_coords
-        lat2, lon2 = e_coords
-        south = min(lat1, lat2) - 0.01
-        north = max(lat1, lat2) + 0.01
-        west = min(lon1, lon2) - 0.01
-        east = max(lon1, lon2) + 0.01
-        area = f"({south},{west},{north},{east})"
-
-        return (
-            "[out:json][timeout:25];(\n"
-            f"  node{filters}{area};\n"
-            f"  way{filters}{area};\n"
-            f"  rel{filters}{area};\n"
-            f"){out_limit}"
-        )
-
-    elif P.get("mode") == "generic":
+    if P.get("mode") in ("generic", "route_check", "route_via"):
         if P.get("bbox"):
-            s, w, n, e = P["bbox"]
-            area = f"({s},{w},{n},{e})"
-        elif P.get("center") and P.get("radius"):
-            lat, lon = P["center"]
-            area = f"(around:{P['radius']},{lat},{lon})"
-        else:
-            raise ValueError("No location (bbox or center) available for generic query.")
+            # Fallback to old manual QL for bounding box use
+            raise NotImplementedError("BBox queries not yet supported via OSMPythonTools")
 
-        if filters.strip() == "":
-            raise ValueError("Generic Overpass query without filters would be too slow.")
+        area_id = None
+        if P.get("place_name"):
+            try:
+                area_id = _osm_nominatim.query(P["place_name"]).areaId()
+            except Exception as e:
+                print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
+                area_id = None
 
-        return (
-            "[out:json][timeout:20];(\n"
-            f"  node{filters}{area};\n"
-            f"  way{filters}{area};\n"
-            f"  rel{filters}{area};\n"
-            f"){out_limit}"
+        selector_parts = []
+        if P.get("tag_key") and P.get("tag_value"):
+            selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
+        if P.get("wheelchair_only"):
+            selector_parts.append('"wheelchair"="yes"')
+        if P.get("pet_friendly"):
+            selector_parts.append('"pets"="yes"')
+        if P.get("opening_hours_regex"):
+            selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
+
+        selector = " and ".join(selector_parts) if selector_parts else None
+
+        query = overpassQueryBuilder(
+            area=area_id,
+            elementType=["node", "way", "relation"],
+            selector=selector,
+            out="body",
+            includeGeometry=False
         )
 
-    raise ValueError(f"❌ Unknown or missing mode: {P.get('mode')}")
+        return _osm_overpass.query(query)
 
+    raise ValueError(f"❌ Unsupported mode for OSMPythonTools: {P.get('mode')}")
 
 # Command-line interface
 if __name__ == "__main__":
