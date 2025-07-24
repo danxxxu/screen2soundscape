@@ -327,37 +327,27 @@ def parse_question(raw_q, lat=None, lon=None):
     return P
 
 
-
 def build_overpass_query(P):
-    tag_f = f'["{P.get("tag_key")}"="{P.get("tag_value")}"]' if P.get("tag_key") else ""
+    tag_f = f'["{P["tag_key"]}"="{P["tag_value"]}"]' if P.get("tag_key") else ""
     extra_tag = P.get("extra_tag", "")
     wh_f = '["wheelchair"="yes"]' if P.get("wheelchair_only") else ""
     pet_f = '["pets"="yes"]' if P.get("pet_friendly") else ""
     open_f = f'["opening_hours"~"{P.get("opening_hours_regex")}"]' if P.get("opening_hours_regex") else ""
 
+    filters = f"{extra_tag}{tag_f}{wh_f}{pet_f}{open_f}"
+
+    # Limit results to avoid slow queries
+    out_limit = "out center 20;"  # Top 20 results max
+
     if P.get("mode") == "boundary_lookup":
         name = P["place_name"]
         return (
-            f'[out:json][timeout:25];relation["boundary"="administrative"]["name"="{name}"]'
+            f'[out:json][timeout:20];'
+            f'relation["boundary"="administrative"]["name"="{name}"]'
             '["admin_level"~"^(8|6|4)$"];out body;>;out skel qt;'
         )
 
-    if P.get("mode") == "generic":
-        if P.get("bbox"):
-            s, w2, n2, e = P["bbox"]
-            area = f"({s},{w2},{n2},{e})"
-        else:
-            lat, lon = P["center"]
-            area = f"(around:{P['radius']},{lat},{lon})"
-        return (
-            "[out:json][timeout:25];(\n"
-            f"  node{tag_f}{wh_f}{pet_f}{open_f}{area};\n"
-            f"  way{tag_f}{wh_f}{pet_f}{open_f}{area};\n"
-            f"  rel{tag_f}{wh_f}{pet_f}{open_f}{area};\n"
-            ");out center;"
-        )
-
-    if P.get("mode") in ("route_check", "route_via"):
+    elif P.get("mode") in ("route_check", "route_via"):
         s_coords, e_coords = P["start_coords"], P["end_coords"]
         lat1, lon1 = s_coords
         lat2, lon2 = e_coords
@@ -365,16 +355,39 @@ def build_overpass_query(P):
         north = max(lat1, lat2) + 0.01
         west = min(lon1, lon2) - 0.01
         east = max(lon1, lon2) + 0.01
+        area = f"({south},{west},{north},{east})"
+
         return (
             "[out:json][timeout:25];(\n"
-            f"  node{extra_tag}{tag_f}{wh_f}{pet_f}{open_f}{area};\n"
-            f"  way{extra_tag}{tag_f}{wh_f}{pet_f}{open_f}{area};\n"
-            f"  rel{extra_tag}{tag_f}{wh_f}{pet_f}{open_f}{area};\n"
-            ");out center;"
+            f"  node{filters}{area};\n"
+            f"  way{filters}{area};\n"
+            f"  rel{filters}{area};\n"
+            f"){out_limit}"
         )
 
+    elif P.get("mode") == "generic":
+        if P.get("bbox"):
+            s, w, n, e = P["bbox"]
+            area = f"({s},{w},{n},{e})"
+        elif P.get("center") and P.get("radius"):
+            lat, lon = P["center"]
+            area = f"(around:{P['radius']},{lat},{lon})"
+        else:
+            raise ValueError("No location (bbox or center) available for generic query.")
 
-    raise ValueError("No location (bbox or center) could be resolved.")
+        if filters.strip() == "":
+            raise ValueError("Generic Overpass query without filters would be too slow.")
+
+        return (
+            "[out:json][timeout:20];(\n"
+            f"  node{filters}{area};\n"
+            f"  way{filters}{area};\n"
+            f"  rel{filters}{area};\n"
+            f"){out_limit}"
+        )
+
+    raise ValueError(f"❌ Unknown or missing mode: {P.get('mode')}")
+
 
 # Command-line interface
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
 import os
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
+
 import re
 import argparse
 import datetime
@@ -13,7 +15,7 @@ import torch
 # m whisper.whisper import model
 import whisper
 model = whisper.load_model("base")
-os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
+
 warnings.filterwarnings("ignore")
 torch._C._jit_set_profiling_mode(False)
 torch._C._jit_set_profiling_executor(False)
@@ -71,9 +73,10 @@ def speak(text: str, language: str, speaker_key: str, speed: float = 1.0, output
     for i, sentence in enumerate(sentences):
         out_path = os.path.join(output_dir, f"batch_{i}.wav")
         audio = model.apply_tts(sentence, sample_rate)
-        print(f"Sentence {i}: shape={audio.shape}, max={np.max(audio)}, min={np.min(audio)}")
+        audio_np = np.array(audio, dtype=np.float32)
+        print(f"Sentence {i}: shape={audio_np.shape}, max={np.max(audio_np):.4f}, min={np.min(audio_np):.4f}")
 
-        
+            
         # Ensure waveform is a 2D FloatTensor of shape (1, N)
         audio_np = np.array(audio, dtype=np.float32).squeeze()
         waveform = torch.from_numpy(audio_np).unsqueeze(0)
