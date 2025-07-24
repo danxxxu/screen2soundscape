@@ -132,6 +132,8 @@ def extract_locations_llama(text):
     with contextlib.redirect_stdout(io.StringIO()):
         resp = llm(prompt, max_tokens=32, echo=False)
     return resp["choices"][0]["text"].strip()
+
+
 def apply_location_extraction(P, q, doc):
     loc, source = extract_location(q, doc)
     if loc:
@@ -194,6 +196,15 @@ def apply_route_query(P, q):
 
 
 def apply_special_filters(P, q):
+    if re.search(r"coffee\s+(shop|place|bar|café|house)", q, re.IGNORECASE) and P.get("center"):
+        P.update({
+            "tag_key": "amenity",
+            "tag_value": "cafe",
+            "mode": "generic",
+            "radius": DEFAULT_RADIUS
+        })
+        return True
+
     if re.search(r"pet[- ]friendly", q, re.IGNORECASE) and P.get("center"):
         P.update({
             "tag_key": "tourism", "tag_value": "hotel",
@@ -280,6 +291,22 @@ def apply_llama_fallback(P, raw_q):
         print(f"⚠️ LLaMA fallback failed: {e}")
 
 
+def apply_tag_guessing(P, q):
+    if not P.get("center"):
+        return False
+    words = [w.lower().strip(string.punctuation) for w in q.split()]
+    candidates = get_close_matches(" ".join(words), TAG_MAP.keys(), n=1, cutoff=0.85)
+    if candidates:
+        k, v = TAG_MAP[candidates[0]]
+        P.update({
+            "tag_key": k, "tag_value": v,
+            "mode": "generic", "radius": DEFAULT_RADIUS
+        })
+        print(f"🧠 Fuzzy tag guess: '{candidates[0]}' → [{k}={v}]")
+        return True
+    return False
+
+
 def parse_question(raw_q, lat=None, lon=None):
     q = detect_and_translate(raw_q)
     doc = nlp(q)
@@ -298,6 +325,8 @@ def parse_question(raw_q, lat=None, lon=None):
     if apply_cuisine_query(P, q): return P
     if apply_route_query(P, q): return P
     if apply_special_filters(P, q): return P
+    if apply_tag_guessing(P, q): return P
+
 
     # Step 3: LLaMA fallback if nothing detected
     if not P.get("center"):
