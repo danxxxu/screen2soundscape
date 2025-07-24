@@ -21,7 +21,7 @@ def generate_overpass_query(question: str) -> str:
         f"Question: \"{question}\"\n\n"
         f"Return ONLY the Overpass QL query (no explanation)."
     )
-    resp = _llm(prompt=prompt, max_tokens=256, temperature=0.0, stop=[";export", "; //"])
+    resp = _llm(prompt=prompt, max_tokens=60, temperature=0.3, stop=[";export", "; //"])
     q = resp["choices"][0]["text"].strip()
     if not q.endswith(";"):
         q += "\n;"
@@ -58,9 +58,9 @@ def summarize_results(question: str, data: dict) -> str:
 
     prompt = (
         f"The user asked: \"{question}\"\n"
-        f"There are {count} matching places. Here are some of them:\n"
+        f"Here are some matching places:\n"
         f"{details}\n"
-        "Summarize this into a clear and helpful spoken paragraph."
+        "Summarize this into a short, helpful spoken sentence."
     )
 
     resp = _llm(prompt=prompt, max_tokens=150, temperature=0.3)

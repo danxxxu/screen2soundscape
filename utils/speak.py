@@ -34,7 +34,7 @@ def get_silero_model(language='en', speaker='lj_v2'):
         )
         
         model.to('cpu')  # Explicitly set to CPU
-        model.eval()
+        # model.eval()
 
         return model
     except Exception as e:
