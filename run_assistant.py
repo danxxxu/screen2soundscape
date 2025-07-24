@@ -56,12 +56,10 @@ def get_directions(start, end, mode="walk"):
 
 
 def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=None):
-
     if not speaker:
         print("❌ You must specify a --speaker.")
         return
 
-    # Step 1: Get question
     print("🕒 Step 1: Getting question (recording or from text)...")
     t1 = time.time()
     question, lang = get_question_and_language(text=text, text_file=text_file)
@@ -69,7 +67,6 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     print(f"✅ Got question: [{lang}] {question}")
     print(f"⏱️ Step 1 duration: {t2 - t1:.2f} seconds\n")
 
-    # Step 2: Parse question
     print("🕒 Step 2: Parsing question...")
     t3 = time.time()
     params = parse_question(question, lat=lat, lon=lon)
@@ -90,60 +87,52 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
         except Exception as e:
             print(f"❌ Failed to get directions: {e}")
             return
-        if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
-            if lat is None or lon is None:
-                print("❌ Could not resolve a location from the question.")
-                return
-            params["center"] = [lat, lon]
-            params["mode"] = "generic"
-            params["radius"] = 1000
-            print(f"📍 No location found in question. Using provided coordinates: {params['center']}")
-        else:
-            print("❌ Could not resolve a location from the question.")
-            return
 
+    if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
+        print("❌ Could not resolve a location from the question.")
+        return
 
-        # Step 3: Build Overpass query
-        print("🕒 Step 3: Building Overpass QL query...")
-        t5 = time.time()
+    # Step 3: Build Overpass query
+    print("🕒 Step 3: Building Overpass QL query...")
+    t5 = time.time()
+    try:
         overpass_query = build_overpass_query(params)
         t6 = time.time()
         print("✅ Built Overpass query:")
         print(overpass_query)
         print(f"⏱️ Step 3 duration: {t6 - t5:.2f} seconds\n")
+    except Exception as e:
+        print(f"❌ Failed to build Overpass query: {e}")
+        return
 
-        # Step 4: Run Overpass query
-        print("🕒 Step 4: Running Overpass API query...")
-        t7 = time.time()
-        try:
-            results = run_overpass_query(overpass_query)
-            t8 = time.time()
-            print(f"✅ Got {len(results.get('elements', []))} result(s) from Overpass.")
-            if save_json:
-                os.makedirs("osm_assistant_output", exist_ok=True)
-                with open("osm_assistant_output/raw.json", "w", encoding="utf-8") as f:
-                    json.dump(results, f, indent=2, ensure_ascii=False)
-            print(f"⏱️ Step 4 duration: {t8 - t7:.2f} seconds\n")
-        except Exception as e:
-            t8 = time.time()
-            summary = f"❌ Failed to run Overpass query: {e}"
-            print(summary)
-            print(f"⏱️ Step 4 duration: {t8 - t7:.2f} seconds\n")
-            return
+    # Step 4: Run Overpass query
+    print("🕒 Step 4: Running Overpass API query...")
+    t7 = time.time()
+    try:
+        results = run_overpass_query(overpass_query)
+        t8 = time.time()
+        print(f"✅ Got {len(results.get('elements', []))} result(s) from Overpass.")
+        if save_json:
+            os.makedirs("osm_assistant_output", exist_ok=True)
+            with open("osm_assistant_output/raw.json", "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2, ensure_ascii=False)
+        print(f"⏱️ Step 4 duration: {t8 - t7:.2f} seconds\n")
+    except Exception as e:
+        print(f"❌ Failed to run Overpass query: {e}")
+        return
 
-        # Step 5: Summarize results
-        print("🕒 Step 5: Summarizing results with LLM...")
-        t9 = time.time()
-        summary = summarize_results(question, results)
-        t10 = time.time()
-        print("✅ Summary (English):")
-        print(summary)
-        print(f"⏱️ Step 5 duration: {t10 - t9:.2f} seconds\n")
+    # Step 5: Summarize results
+    print("🕒 Step 5: Summarizing results with LLM...")
+    t9 = time.time()
+    summary = summarize_results(question, results)
+    t10 = time.time()
+    print("✅ Summary (English):")
+    print(summary)
+    print(f"⏱️ Step 5 duration: {t10 - t9:.2f} seconds\n")
 
     # Step 5.5: Translate summary if needed
     lang_code = lang.lower()
     translated_summary = summary
-
     if lang_code not in ["en", "en_us", "en_newest"]:
         try:
             print(f"🌍 Detected non-English language '{lang}'. Translating summary...")
@@ -152,7 +141,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
             print(translated_summary)
         except Exception as e:
             print(f"⚠️ Failed to translate summary to '{lang_code}': {e}")
-            translated_summary = summary  # fallback to English
+            translated_summary = summary
 
     # Step 6: Speak summary
     print("🕒 Step 6: Speaking response with TTS...")
@@ -164,6 +153,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
 
     total_time = t12 - t1
     print(f"🎉 Assistant process completed in {total_time:.2f} seconds.")
+
     
     
 if __name__ == "__main__":
