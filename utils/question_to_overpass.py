@@ -80,7 +80,7 @@ def detect_and_translate(q):
         lang = detect(q)
         if lang != "en":
             t = GoogleTranslator(source=lang, target="en").translate(q)
-            print(f"🌍 {lang} → EN: {q!r} → {t!r}")
+            print(f"\U0001F30D {lang} → EN: {q!r} → {t!r}")
             return t
     except Exception as e:
         print(f"⚠️ Lang detect fail: {e}")
@@ -218,15 +218,7 @@ def build_overpass_query(P):
         elif P.get("center") and P.get("radius"):
             lat, lon = P["center"]
             radius = P["radius"]
-            query = overpassQueryBuilder(
-                around=radius,
-                lat=lat,
-                lon=lon,
-                elementType=["node", "way", "relation"],
-                out="body",
-                includeGeometry=False,
-                **({"selector": selector} if selector else {})
-            )
+            query = f"[out:json][timeout:25];(node(around:{radius},{lat},{lon}){f'[{selector}]' if selector else ''};way(around:{radius},{lat},{lon}){f'[{selector}]' if selector else ''};relation(around:{radius},{lat},{lon}){f'[{selector}]' if selector else ''};);out body;"
         else:
             raise ValueError("❌ Cannot build query: no area or coordinates available.")
 
