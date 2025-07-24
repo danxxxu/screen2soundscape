@@ -9,7 +9,7 @@ import numpy as np
 import logging
 import warnings
 import torch
-
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 warnings.filterwarnings("ignore")
 torch._C._jit_set_profiling_mode(False)
 torch._C._jit_set_profiling_executor(False)
