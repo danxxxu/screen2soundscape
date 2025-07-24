@@ -323,7 +323,7 @@ def apply_special_filters(P, q):
 
 
 # =============== Main Parse Function ===============
-def parse_question(raw_q):
+def parse_question(raw_q, lat=None, lon=None):
     t0 = time.time()
     q = detect_and_translate(raw_q)
     doc = nlp(q)
@@ -368,7 +368,6 @@ def parse_question(raw_q):
                 P["loc_source"] = "LLaMA"
                 print(f"🤖 LLaMA fallback: {fallback_loc} → {coords}")
             except:
-                # Try with suffix variants
                 for suffix in [" building", " museum", " location"]:
                     retry = fallback_loc + suffix
                     try:
@@ -383,7 +382,14 @@ def parse_question(raw_q):
         except Exception as e:
             print(f"⚠️ LLaMA extraction failed: {e}")
 
-    # === Step 3: Final fallback to Mount Everest ===
+    # === Step 3: Use provided lat/lon if available ===
+    if not P["center"] and lat is not None and lon is not None:
+        P["center"] = (lat, lon)
+        P["loc_source"] = "fallback_coords"
+        P["place_name"] = "user_location"
+        print(f"📍 Using fallback coordinates: ({lat}, {lon})")
+
+    # === Step 4: Final fallback to Mount Everest ===
     if not P["center"]:
         P["center"] = (27.9881, 86.9250)
         P["place_name"] = "Mount Everest"
@@ -393,6 +399,7 @@ def parse_question(raw_q):
     P["mode"] = "generic"
     print(f"🕒 parse_question took {time.time() - t0:.2f}s")
     return P
+
 
 
 
