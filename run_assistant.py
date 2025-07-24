@@ -72,7 +72,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     # Step 2: Parse question
     print("🕒 Step 2: Parsing question...")
     t3 = time.time()
-    params = parse_question(question)
+    params = parse_question(question, lat=lat, lon=lon)
     t4 = time.time()
     print(f"✅ Parsed parameters: {params}")
     print(f"⏱️ Step 2 duration: {t4 - t3:.2f} seconds\n")
@@ -90,10 +90,14 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
         except Exception as e:
             print(f"❌ Failed to get directions: {e}")
             return
-    if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
-        if lat is not None and lon is not None:
+        if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
+            if lat is None or lon is None:
+                print("❌ Could not resolve a location from the question.")
+                return
             params["center"] = [lat, lon]
-            print(f"📍 Using provided coordinates as center: {params['center']}")
+            params["mode"] = "generic"
+            params["radius"] = 1000
+            print(f"📍 No location found in question. Using provided coordinates: {params['center']}")
         else:
             print("❌ Could not resolve a location from the question.")
             return
