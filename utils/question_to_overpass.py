@@ -10,10 +10,17 @@ from langdetect import detect
 from deep_translator import GoogleTranslator
 import string
 from geoparser import Geoparser
+import contextlib, io
 from utils.llama_singleton import get_llm
+
+@lru_cache()
+def get_llm():
+    from utils.llama_singleton import get_llm as load_llm
+    return load_llm()
+
 llm = get_llm()
 
-import contextlib, io
+
 
 # Initialize geoparser and spaCy
 geoparser = Geoparser()
@@ -45,6 +52,13 @@ CUISINE_KEYWORDS = [
     "vegetarian", "vegan", "halal", "kosher"
 ]
 
+# Lazy imports
+@lru_cache()
+def get_nlp():
+    import spacy
+    return spacy.load("en_core_web_sm")
+
+
 def load_text(path):
     with open(path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
@@ -52,22 +66,26 @@ def load_text(path):
 def clean_name(n):
     return n.strip().strip(string.punctuation)
 
+
 def detect_and_translate(q):
-    if detect(q) == "fr":
-        try:
-            t = GoogleTranslator(source="fr", target="en").translate(q)
-            print(f"🌍 {q!r} → {t!r}")
+    try:
+        lang = detect(q)
+        if lang != "en":
+            t = GoogleTranslator(source=lang, target="en").translate(q)
+            print(f"🌍 Detected {lang}: {q!r} → {t!r}")
             return t
-        except:
-            return q
+    except:
+        pass
     return q
 
+@lru_cache(maxsize=200)
 def geocode_point(loc):
     geo = Nominatim(user_agent="osmv", timeout=5)
     place = geo.geocode(loc, exactly_one=True)
     if not place:
         raise ValueError(f"Could not geocode: {loc}")
     return place.latitude, place.longitude
+
 
 def geocode_bbox(loc):
     geo = Nominatim(user_agent="osmv", timeout=5)
@@ -120,6 +138,15 @@ def extract_location(q, doc):
                 return res, source
     return None, None
 
+def try_geocode_variants(name):
+    variants = [name] + [name + suffix for suffix in [" building", " museum", " location"]]
+    for variant in variants:
+        try:
+            return variant, geocode_point(variant)
+        except:
+            continue
+    return None, None
+
         
 def extract_locations_llama(text):
     prompt = (
@@ -130,7 +157,7 @@ def extract_locations_llama(text):
         f"Input: {text}\nOutput:"
     )
     with contextlib.redirect_stdout(io.StringIO()):
-        resp = llm(prompt, max_tokens=32, echo=False)
+        resp = get_llm()(prompt, max_tokens=32, echo=False)
     return resp["choices"][0]["text"].strip()
 
 
@@ -309,51 +336,85 @@ def apply_tag_guessing(P, q):
 
 def parse_question(raw_q, lat=None, lon=None):
     q = detect_and_translate(raw_q)
-    doc = nlp(q)
+    doc = get_nlp()(q)
+
     P = {
         "tag_key": None, "tag_value": None,
         "mode": None, "center": None, "bbox": None, "radius": None,
         "wheelchair_only": False, "pet_friendly": False,
         "opening_hours_regex": None,
-        "start_coords": None, "end_coords": None, "poi_coords": None
+        "start_coords": None, "end_coords": None, "poi_coords": None,
+        "place_name": None, "loc_source": None
     }
 
-    # Step 1: Extract location from text (NER, regex, etc.)
-    apply_location_extraction(P, q, doc)
-
-    # Step 2: Specialized query types
-    if apply_cuisine_query(P, q): return P
+    # Step 1: Attempt known parsers fast
     if apply_route_query(P, q): return P
     if apply_special_filters(P, q): return P
-    if apply_tag_guessing(P, q): return P
+    if apply_cuisine_query(P, q): return P
 
+    # Step 2: Named Entity Recognition or regex location match
+    candidates = []
+    for ent in doc.ents:
+        if ent.label_ in {"GPE", "LOC", "FAC", "ORG"}:
+            candidates.append(ent.text)
+    m = re.search(r"(?:in|near|around|by)\s+(.+)", q, re.IGNORECASE)
+    if m:
+        candidates.append(m.group(1))
 
-    # Step 3: LLaMA fallback if nothing detected
-    if not P.get("center"):
-        apply_llama_fallback(P, raw_q)
+    # Step 3: Geocode in parallel
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future_to_name = {executor.submit(geocode_point, clean_name(name)): name for name in candidates}
+        for future in as_completed(future_to_name):
+            try:
+                coords = future.result()
+                name = clean_name(future_to_name[future])
+                P["center"] = coords
+                P["place_name"] = name
+                P["loc_source"] = "NER/regex"
+                print(f"📍 Location \"{name}\" geocoded → {coords}")
+                break
+            except:
+                continue
 
-    # Step 4: Fallback to provided coordinates if no location found
+    # Step 4: Fuzzy tag guessing
+    if not P.get("tag_key") and apply_tag_guessing(P, q):
+        return P
+
+    # Step 5: LLaMA fallback (skip if simple query)
+    if not P.get("center") and any(x in q.lower() for x in ["where", "near", "location"]):
+        try:
+            fallback_loc = extract_locations_llama(raw_q)
+            name, coords = try_geocode_variants(fallback_loc)
+            if coords:
+                P["center"] = coords
+                P["place_name"] = name
+                P["loc_source"] = "LLaMA"
+                print(f"📍 LLaMA fallback location: {name} → {coords}")
+        except Exception as e:
+            print(f"⚠️ LLaMA fallback failed: {e}")
+
+    # Step 6: Provided lat/lon fallback
     if not P.get("center"):
         if lat is not None and lon is not None:
             P["center"] = [lat, lon]
             P["mode"] = "generic"
             P["radius"] = DEFAULT_RADIUS
             P["loc_source"] = "user_coordinates"
-            print(f"📍 No location found in text. Using provided coordinates: {P['center']}")
+            print(f"📍 Using user coordinates: {P['center']}")
         else:
-            # Step 5: Fallback to Mount Everest
-            mount_everest = (27.9881, 86.9250)
-            P["center"] = list(mount_everest)
+            P["center"] = [27.9881, 86.9250]  # Everest
             P["mode"] = "generic"
             P["radius"] = DEFAULT_RADIUS
             P["loc_source"] = "fallback_everest"
-            print("📍 No location or user coordinates provided. Falling back to Mount Everest.")
+            print("📍 Fallback to Mount Everest")
 
-    # Step 6: Final generic fallback if center exists but no mode
+    # Step 7: Ensure mode
     if P.get("center") and not P.get("mode"):
-        P.update({"mode": "generic", "radius": DEFAULT_RADIUS})
+        P["mode"] = "generic"
+        P["radius"] = DEFAULT_RADIUS
 
     return P
+
 
 
 def build_overpass_query(P):
