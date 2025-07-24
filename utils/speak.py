@@ -9,6 +9,8 @@ import numpy as np
 import logging
 import warnings
 import torch
+
+from whisper.whisper import model
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 warnings.filterwarnings("ignore")
 torch._C._jit_set_profiling_mode(False)
@@ -28,6 +30,10 @@ def get_silero_model(language='en', speaker='lj_v2'):
             language=language,
             speaker=speaker
         )
+        
+        model.to('cpu')  # Explicitly set to CPU
+        model.eval()
+
         return model
     except Exception as e:
         raise RuntimeError(f"❌ Failed to load Silero TTS model: {e}")
@@ -63,6 +69,8 @@ def speak(text: str, language: str, speaker_key: str, speed: float = 1.0, output
     for i, sentence in enumerate(sentences):
         out_path = os.path.join(output_dir, f"batch_{i}.wav")
         audio = model.apply_tts(sentence, sample_rate)
+        print(f"Sentence {i}: shape={audio.shape}, max={np.max(audio)}, min={np.min(audio)}")
+
         
         # Ensure waveform is a 2D FloatTensor of shape (1, N)
         audio_np = np.array(audio, dtype=np.float32).squeeze()
