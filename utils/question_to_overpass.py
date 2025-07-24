@@ -82,7 +82,7 @@ def extract_locations_llama(text):
         f"Input: {text}\nOutput:"
     )
     with contextlib.redirect_stdout(io.StringIO()):
-        resp = llm()(prompt, max_tokens=32, echo=False)
+        resp = llm(prompt, max_tokens=32, echo=False)
     return resp["choices"][0]["text"].strip()
 
 
@@ -419,26 +419,28 @@ def build_overpass_query(P):
             # Fallback to old manual QL for bounding box use
             raise NotImplementedError("BBox queries not yet supported via OSMPythonTools")
 
-        area_id = None
-        if P.get("place_name"):
-            try:
-                area_id = _osm_nominatim.query(P["place_name"]).areaId()
-            except Exception as e:
-                print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
-                area_id = None
+    area_id = None
+    query = None
 
-        selector_parts = []
-        if P.get("tag_key") and P.get("tag_value"):
-            selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
-        if P.get("wheelchair_only"):
-            selector_parts.append('"wheelchair"="yes"')
-        if P.get("pet_friendly"):
-            selector_parts.append('"pets"="yes"')
-        if P.get("opening_hours_regex"):
-            selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
+    if P.get("place_name") not in (None, "user_location"):
+        try:
+            area_id = _osm_nominatim.query(P["place_name"]).areaId()
+        except Exception as e:
+            print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
 
-        selector = " and ".join(selector_parts) if selector_parts else None
+    selector_parts = []
+    if P.get("tag_key") and P.get("tag_value"):
+        selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
+    if P.get("wheelchair_only"):
+        selector_parts.append('"wheelchair"="yes"')
+    if P.get("pet_friendly"):
+        selector_parts.append('"pets"="yes"')
+    if P.get("opening_hours_regex"):
+        selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
 
+    selector = " and ".join(selector_parts) if selector_parts else None
+
+    if area_id:
         query = overpassQueryBuilder(
             area=area_id,
             elementType=["node", "way", "relation"],
@@ -446,8 +448,22 @@ def build_overpass_query(P):
             out="body",
             includeGeometry=False
         )
+    else:
+        # fallback to around query
+        if not P.get("center") or not P.get("radius"):
+            raise ValueError("❌ Cannot build query: no areaId or coordinates.")
+        lat, lon = P["center"]
+        radius = P["radius"]
+        query = overpassQueryBuilder(
+            bbox=(lat, lon, radius),
+            elementType=["node", "way", "relation"],
+            selector=selector,
+            out="body",
+            includeGeometry=False
+        )
 
-        return _osm_overpass.query(query)
+    return _osm_overpass.query(query)
+
 
     raise ValueError(f"❌ Unsupported mode for OSMPythonTools: {P.get('mode')}")
 
