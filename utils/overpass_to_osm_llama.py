@@ -7,7 +7,7 @@ from requests.exceptions import HTTPError
 from utils.llama_singleton import get_llm
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-_llm = get_llm()
+# _llm = get_llm()
 
 
 DEN_HAAG_CONTEXT = (
