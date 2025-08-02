@@ -1,22 +1,22 @@
 import os
 import sys
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
-stderr = sys.stderr
+# silence stderr from torch hub
 sys.stderr = open(os.devnull, 'w')
+
 import re
 import argparse
 import datetime
+from typing import Dict, Any
+
 import torch
 import torchaudio
-from pydub import AudioSegment
 import numpy as np
-import logging
 import warnings
-import torch
 
-# m whisper.whisper import model
 import whisper
-model = whisper.load_model("base")
+# Load Whisper once at import
+_whisper_model = whisper.load_model("base")
 
 warnings.filterwarnings("ignore")
 torch._C._jit_set_profiling_mode(False)
@@ -26,33 +26,42 @@ torch._C._jit_set_profiling_executor(False)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "osm_assistant_speaker_audio")
 
+# pick GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def get_silero_model(language='en', speaker='lj_v2'):
-    try:
-        model, _ = torch.hub.load(
-            repo_or_dir='snakers4/silero-models',
-            model='silero_tts',
-            language=language,
-            speaker=speaker
-        )
-        
-        model.to('cpu')  # Explicitly set to CPU
-        # model.eval()
+# cache for Silero models
+_silero_models: Dict[str, Any] = {}
 
-        return model
-    except Exception as e:
-        raise RuntimeError(f"❌ Failed to load Silero TTS model: {e}")
+def get_silero_model(language: str = 'en', speaker: str = 'lj_v2'):
+    key = f"{language}_{speaker}"
+    if key in _silero_models:
+        return _silero_models[key]
+    model, _ = torch.hub.load(
+        repo_or_dir='snakers4/silero-models',
+        model='silero_tts',
+        language=language,
+        speaker=speaker
+    )
+    model.to(device)
+    model.eval()
+    _silero_models[key] = model
+    return model
 
-def clean_sentences(text):
+def clean_sentences(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
 
-def speak(text: str, language: str, speaker_key: str, speed: float = 1.0, output_dir: str = DEFAULT_OUTPUT_DIR) -> str:
+def speak(
+    text: str,
+    language: str,
+    speaker_key: str,
+    speed: float = 1.0,  # currently unused
+    output_dir: str = DEFAULT_OUTPUT_DIR
+) -> str:
     os.makedirs(output_dir, exist_ok=True)
 
+    # split and select speaker
     sentences = clean_sentences(text)
     lang_code = language.lower()[:2]
-
     SUPPORTED_SPEAKERS = {
         'en': 'lj_v2',
         'fr': 'gilles_v2',
@@ -63,56 +72,57 @@ def speak(text: str, language: str, speaker_key: str, speed: float = 1.0, output
         'kk': 'aigul_v2',
         'uz': 'dilnavoz_v2'
     }
-
     speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
     model = get_silero_model(language=lang_code, speaker=speaker)
+
+    # build one long numpy array with 0.5s pre-silence + 0.3s between sentences
     sample_rate = 48000
+    silence_start = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
+    silence_between = np.zeros(int(0.3 * sample_rate), dtype=np.float32)
 
+    full_audio = silence_start
+    for sent in sentences:
+        wav = model.apply_tts(sent, sample_rate=sample_rate)
+        full_audio = np.concatenate([full_audio, np.array(wav, dtype=np.float32), silence_between])
+
+    # convert to tensor and save as MP3
+    waveform = torch.from_numpy(full_audio).unsqueeze(0).to(device)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    wav_paths = []
+    mp3_path = os.path.join(output_dir, f"tts_{timestamp}.mp3")
 
-    print(" > Text split to sentences.")
-    for i, sentence in enumerate(sentences):
-        out_path = os.path.join(output_dir, f"batch_{i}.wav")
-        audio = model.apply_tts(sentence, sample_rate)
-        audio_np = np.array(audio, dtype=np.float32)
-        print(f"Sentence {i}: shape={audio_np.shape}, max={np.max(audio_np):.4f}, min={np.min(audio_np):.4f}")
+    torchaudio.save(
+        mp3_path,
+        waveform.cpu(),          # saving happens on CPU
+        sample_rate,
+        format="mp3"
+    )
 
-            
-        # Ensure waveform is a 2D FloatTensor of shape (1, N)
-        audio_np = np.array(audio, dtype=np.float32).squeeze()
-        waveform = torch.from_numpy(audio_np).unsqueeze(0)
-        
-        torchaudio.save(out_path, waveform, sample_rate=sample_rate)
-        wav_paths.append(out_path)
-
-    combined = AudioSegment.silent(duration=500)
-    for path in wav_paths:
-        seg = AudioSegment.from_wav(path)
-        combined += seg + AudioSegment.silent(duration=300)
-
-    print(f"Audio stats: min={audio_np.min():.5f}, max={audio_np.max():.5f}, mean={audio_np.mean():.5f}")
-    final_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
-    combined.export(final_path, format="wav")
-
-    for p in wav_paths:
-        try:
-            os.remove(p)
-        except OSError:
-            pass
-
-    print(f"[speak] Saved Silero TTS to '{final_path}'")
-    return final_path
+    print(f"[speak] Saved Silero TTS to '{mp3_path}'")
+    return mp3_path
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate speech from text using Silero TTS.")
+    parser = argparse.ArgumentParser(
+        description="Generate speech from text using Silero TTS."
+    )
     parser.add_argument("text", help="The text to speak.")
-    parser.add_argument("--language", default="en", help="Language (default: en).")
-    parser.add_argument("--speaker", required=True, help="Speaker name (for folder consistency only)")
-    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier (currently unused).")
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="Where to save the final WAV.")
+    parser.add_argument("--language", default="en", help="Language code (default: en).")
+    parser.add_argument(
+        "--speaker",
+        required=True,
+        help="Speaker key (one of the supported voices, for folder consistency)"
+    )
+    parser.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        help="Speech speed multiplier (currently unused)."
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=DEFAULT_OUTPUT_DIR,
+        help="Where to save the final MP3."
+    )
     args = parser.parse_args()
-
     speak(
         text=args.text,
         language=args.language,

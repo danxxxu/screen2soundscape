@@ -17,7 +17,7 @@ from deep_translator import GoogleTranslator
 from utils.transcribe import record_and_transcribe
 from utils.speak import speak
 from utils.question_to_overpass import parse_question, build_overpass_query
-from utils.overpass_to_osm import run_overpass_query, summarize_results, summarize_route
+from utils.overpass_to_osm_llama import run_overpass_query, summarize_results, summarize_route
 
 
 def detect_language(text: str) -> str:
