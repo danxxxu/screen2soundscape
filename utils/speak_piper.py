@@ -7,6 +7,8 @@ from typing import Optional
 import soundfile as sf
 import numpy as np
 
+import glob
+import shutil
 import torch
 from piper.voice import PiperVoice
 
@@ -36,10 +38,11 @@ SUPPORTED_SPEAKERS = {
 }
 
 
+
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
     Load a Piper TTS model for the given language/speaker.
-    Automatically downloads it if missing.
+    Automatically downloads and moves it to MODEL_DIR if missing.
     """
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
@@ -53,13 +56,24 @@ def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
                 ["python3", "-m", "piper.download_voices", speaker],
                 check=True
             )
+
+            # Find downloaded files in Piper's default location
+            voice_dir = os.path.expanduser(f"~/.local/share/piper/voices/")
+            downloaded_files = glob.glob(os.path.join(voice_dir, "**", f"{speaker}*"), recursive=True)
+
+            # Move both .onnx and .json files to MODEL_DIR
+            for f in downloaded_files:
+                dest = os.path.join(MODEL_DIR, os.path.basename(f))
+                shutil.copy(f, dest)
+                print(f"[piper] ✅ Copied {f} -> {dest}")
+
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
                 f"Failed to download Piper model '{speaker}'. "
                 f"Ensure 'piper' is installed and the speaker name is valid.\n{e}"
             )
 
-    # ✅ Load model into cache
+    # ✅ Load model (requires both files)
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
         _piper_models[key] = PiperVoice.load(model_path, use_cuda=(DEVICE == "cuda"))
