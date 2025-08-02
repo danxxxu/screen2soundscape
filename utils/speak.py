@@ -11,13 +11,12 @@ from typing import Dict, Any
 import soundfile as sf
 
 import torch
-import torchaudio
 import numpy as np
 import warnings
 
-import whisper
+# import whisper
 # Load Whisper once at import
-_whisper_model = whisper.load_model("base")
+# _whisper_model = whisper.load_model("base")
 
 warnings.filterwarnings("ignore")
 torch._C._jit_set_profiling_mode(False)
@@ -58,7 +57,9 @@ def speak(
     speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR
 ) -> str:
+    print("[speak] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
+
     sentences = clean_sentences(text)
     lang_code = language.lower()[:2]
 
@@ -73,40 +74,19 @@ def speak(
         'uz': 'dilnavoz_v2'
     }
 
-    # ✅ Always start with a working model
     speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
+    print(f"[speak] ✅ Loading Silero model for {lang_code}/{speaker}")
     model = get_silero_model(language=lang_code, speaker=speaker)
 
-    # ✅ Attempt to load custom weights if file provided
-    if os.path.isfile(speaker_key):
-        try:
-            print(f"[speak] Attempting to load custom model: {speaker_key}")
-            state_dict = torch.load(speaker_key, map_location=device)
-            model.load_state_dict(state_dict, strict=False)
-            print("[speak] ✅ Custom model loaded successfully")
-        except Exception as e:
-            print(f"[speak] ⚠️ Failed to load custom model: {e}")
-            print("[speak] Falling back to default Silero voice.")
-
     sample_rate = 48000
-    silence_start = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
+    full_audio = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
     silence_between = np.zeros(int(0.3 * sample_rate), dtype=np.float32)
 
-    # ✅ Build audio
-    full_audio = silence_start
+    print("[speak] ✅ Starting synthesis")
     for sent in sentences:
-        try:
-            wav = model.apply_tts(sent, sample_rate=sample_rate)
-            full_audio = np.concatenate([full_audio, np.array(wav, dtype=np.float32), silence_between])
-        except Exception as e:
-            print(f"[speak] ❌ TTS failed on sentence '{sent}': {e}")
+        wav = model.apply_tts(sent, sample_rate=sample_rate)
+        full_audio = np.concatenate([full_audio, np.array(wav, dtype=np.float32), silence_between])
 
-    # ✅ Guarantee some output
-    if len(full_audio) < 100:
-        print("[speak] ⚠️ No audio generated, creating silent fallback file")
-        full_audio = np.zeros(int(sample_rate * 1), dtype=np.float32)  # 1s silence
-
-    # ✅ Apply speed control
     if speed != 1.0:
         indices = np.arange(0, len(full_audio), speed)
         indices = indices[indices < len(full_audio)].astype(int)
@@ -118,6 +98,7 @@ def speak(
 
     print(f"[speak] ✅ Saved TTS to '{wav_path}'")
     return wav_path
+
 
 
 if __name__ == "__main__":
