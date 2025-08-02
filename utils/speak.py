@@ -43,7 +43,7 @@ def get_silero_model(language: str = 'en', speaker: str = 'lj_v2'):
         speaker=speaker
     )
     model.to(device)
-    model.eval()
+    # model.eval()
     _silero_models[key] = model
     return model
 
