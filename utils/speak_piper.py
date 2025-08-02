@@ -6,6 +6,7 @@ from typing import Optional
 import soundfile as sf
 import numpy as np
 
+import subprocess
 import torch
 from piper.voice import PiperVoice
 
@@ -41,23 +42,33 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
-    Load a Piper TTS model for the given language/speaker. Cached globally.
+    Load a Piper TTS model for the given language/speaker.
+    Auto-downloads if missing.
     """
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
     model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
 
+    # ✅ If model doesn't exist, attempt download
     if not os.path.isfile(model_path):
-        raise FileNotFoundError(
-            f"Piper model '{speaker}' not found in {MODEL_DIR}. "
-            f"Download from https://github.com/rhasspy/piper/releases/tag/2024.01.26"
-        )
+        print(f"[piper] ⚠️ Model '{speaker}' not found. Attempting to download...")
+        try:
+            subprocess.run(
+                ["python3", "-m", "piper.download_voices", speaker],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f"Failed to download Piper model '{speaker}'. "
+                f"Ensure 'piper' is installed and the speaker name is valid.\n{e}"
+            )
 
+    # ✅ Try loading model (cached)
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
         _piper_models[key] = PiperVoice.load(model_path, use_cuda=(DEVICE == "cuda"))
-    return _piper_models[key]
 
+    return _piper_models[key]
 
 def clean_sentences(text: str):
     """
