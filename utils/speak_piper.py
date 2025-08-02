@@ -97,6 +97,28 @@ def clean_sentences(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
 
 
+import unicodedata
+
+def normalize_for_tts(text: str, language: str = "en") -> str:
+    """
+    Cleans text for Piper TTS while preserving accents for non-English languages.
+    """
+    # Replace problematic punctuation first
+    text = text.replace(";", ",").replace(":", ",")
+    text = text.replace("’", "'").replace("`", "'")
+    
+    # If English voice, remove unsupported non-ASCII characters
+    if language.lower().startswith("en"):
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join([c for c in text if not unicodedata.combining(c)])
+        text = re.sub(r"[^a-zA-Z0-9\s.,'?!]", "", text)
+    else:
+        # Keep accents for other languages but remove weird control chars
+        text = re.sub(r"[^\S\r\n]+", " ", text)
+    
+    return text.strip()
+
+
 def speak(
     text: str,
     language: str = 'en',
@@ -135,11 +157,20 @@ def speak(
 
     print("[piper] ✅ Starting synthesis")
     for sent in sentences:
-        audio_chunks = list(model.synthesize(sent))
-        if not audio_chunks:
-            print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', retrying with truncated text...")
-            truncated = sent[:120]
-            audio_chunks = list(model.synthesize(truncated)) if truncated else []
+        sent_clean = normalize_for_tts(sent, language=language)
+        if not sent_clean:
+            print(f"[piper] ⚠️ Skipping empty/invalid sentence after cleaning: {sent}")
+            continue
+
+        audio_chunks = list(model.synthesize(sent_clean))
+        
+    # Retry with ASCII fallback ONLY for English if failed
+    if not audio_chunks and language.lower().startswith("en"):
+        print(f"[piper] ⚠️ Empty audio for: '{sent_clean}', retrying in ASCII-safe mode...")
+        ascii_text = unicodedata.normalize("NFKD", sent_clean)
+        ascii_text = "".join([c for c in ascii_text if not unicodedata.combining(c)])
+        ascii_text = re.sub(r"[^a-zA-Z0-9\s.,'?!]", "", ascii_text)
+        audio_chunks = list(model.synthesize(ascii_text)) if ascii_text else []
 
         if not audio_chunks:
             print(f"[piper] ❌ Skipping sentence: '{sent}' (no audio generated)")
