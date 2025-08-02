@@ -8,11 +8,10 @@ import soundfile as sf
 import numpy as np
 
 import glob
-import shutil
 import subprocess
 import torch
 from piper.voice import PiperVoice
-
+from pydub import AudioSegment
 # ========================
 # Config
 # ========================
@@ -93,10 +92,12 @@ def speak(
     speaker_key: str = None,
     speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR,
-    return_audio: bool = False
+    return_audio: bool = False,
+    save_as_mp3: bool = True
 ) -> str:
     """
     Convert text to speech using Coqui Piper.
+    Can return a NumPy array for streaming or save as MP3.
     """
     print("[piper] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
@@ -138,17 +139,38 @@ def speak(
         full_audio = np.concatenate([full_audio, wav, silence_between])
 
 
+    if full_audio.size == 0:
+        raise RuntimeError("No audio was generated for the given text.")
+
     if speed != 1.0:
         indices = np.arange(0, len(full_audio), speed)
         indices = indices[indices < len(full_audio)].astype(int)
         full_audio = full_audio[indices]
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
-    sf.write(wav_path, full_audio, sample_rate)
+    file_extension = "mp3" if save_as_mp3 else "wav"
+    output_path = os.path.join(output_dir, f"tts_{timestamp}.{file_extension}")
 
-    print(f"[piper] ✅ Saved TTS to '{wav_path}'")
-    return (full_audio, sample_rate) if return_audio else wav_path
+    # ✅ Save MP3 or WAV
+    if save_as_mp3:
+        audio_int16 = (full_audio * 32767).astype(np.int16)
+        audio_segment = AudioSegment(
+            audio_int16.tobytes(),
+            frame_rate=sample_rate,
+            sample_width=2,
+            channels=1
+        )
+        audio_segment.export(output_path, format="mp3")
+    else:
+        sf.write(output_path, full_audio, sample_rate)
+
+    print(f"[piper] ✅ Saved TTS to '{output_path}'")
+
+    # ✅ Return audio for streaming or file path
+    if return_audio:
+        return full_audio, sample_rate
+    else:
+        return output_path
 
 
 if __name__ == "__main__":
