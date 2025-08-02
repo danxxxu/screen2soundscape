@@ -163,14 +163,14 @@ def speak(
             continue
 
         audio_chunks = list(model.synthesize(sent_clean))
-        
-    # Retry with ASCII fallback ONLY for English if failed
-    if not audio_chunks and language.lower().startswith("en"):
-        print(f"[piper] ⚠️ Empty audio for: '{sent_clean}', retrying in ASCII-safe mode...")
-        ascii_text = unicodedata.normalize("NFKD", sent_clean)
-        ascii_text = "".join([c for c in ascii_text if not unicodedata.combining(c)])
-        ascii_text = re.sub(r"[^a-zA-Z0-9\s.,'?!]", "", ascii_text)
-        audio_chunks = list(model.synthesize(ascii_text)) if ascii_text else []
+
+        # Retry with ASCII fallback ONLY for English if failed
+        if not audio_chunks and language.lower().startswith("en"):
+            print(f"[piper] ⚠️ Empty audio for: '{sent_clean}', retrying in ASCII-safe mode...")
+            ascii_text = unicodedata.normalize("NFKD", sent_clean)
+            ascii_text = "".join([c for c in ascii_text if not unicodedata.combining(c)])
+            ascii_text = re.sub(r"[^a-zA-Z0-9\s.,'?!]", "", ascii_text)
+            audio_chunks = list(model.synthesize(ascii_text)) if ascii_text else []
 
         if not audio_chunks:
             print(f"[piper] ❌ Skipping sentence: '{sent}' (no audio generated)")
@@ -187,6 +187,7 @@ def speak(
             continue
 
         full_audio = np.concatenate([full_audio, wav, silence_between])
+
 
     if full_audio.size == 0:
         raise RuntimeError("No audio was generated for the given text, even after retries.")
