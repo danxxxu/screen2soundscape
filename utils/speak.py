@@ -1,6 +1,8 @@
 import os
+import sys
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
-
+stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
 import re
 import argparse
 import datetime
@@ -80,7 +82,7 @@ def speak(text: str, language: str, speaker_key: str, speed: float = 1.0, output
         # Ensure waveform is a 2D FloatTensor of shape (1, N)
         audio_np = np.array(audio, dtype=np.float32).squeeze()
         waveform = torch.from_numpy(audio_np).unsqueeze(0)
-
+        
         torchaudio.save(out_path, waveform, sample_rate=sample_rate)
         wav_paths.append(out_path)
 
@@ -89,6 +91,7 @@ def speak(text: str, language: str, speaker_key: str, speed: float = 1.0, output
         seg = AudioSegment.from_wav(path)
         combined += seg + AudioSegment.silent(duration=300)
 
+    print(f"Audio stats: min={audio_np.min():.5f}, max={audio_np.max():.5f}, mean={audio_np.mean():.5f}")
     final_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
     combined.export(final_path, format="wav")
 
