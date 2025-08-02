@@ -118,11 +118,19 @@ def speak(
 
     print("[piper] ✅ Starting synthesis")
     for sent in sentences:
-        wav = model.synthesize(sent)
-        wav = np.array(wav, dtype=np.float32).flatten()
+        audio_chunks = list(model.synthesize(sent))
+        if not audio_chunks:
+            print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
+            continue
+
+        # Each chunk is bytes -> convert to int16 array
+        audio_data = b''.join(audio_chunks)
+        wav = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+
         if wav.size == 0:
             print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
             continue
+
         full_audio = np.concatenate([full_audio, wav, silence_between])
 
     if speed != 1.0:
