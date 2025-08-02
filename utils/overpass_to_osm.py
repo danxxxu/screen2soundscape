@@ -41,7 +41,7 @@ def summarize_results(question: str, data: dict) -> str:
 
     # Compress context by extracting only top N points of interest
     compressed = []
-    for el in elements[:5]:  # top 5 results only
+    for el in elements[:3]:  # top 3 results only
         tags = el.get("tags", {})
         name = tags.get("name")
         type_ = tags.get("amenity") or tags.get("shop") or tags.get("tourism") or tags.get("leisure")
@@ -63,18 +63,21 @@ def summarize_results(question: str, data: dict) -> str:
         "Summarize this into a short, helpful spoken sentence."
     )
 
-    resp = _llm(prompt=prompt, max_tokens=150, temperature=0.3)
-    text = resp["choices"][0]["text"].strip().replace("\n", " ")
+    if not compressed:
+        return "Sorry, I couldn't find any relevant places for your query."
+    else:
+        resp = _llm(prompt=prompt, max_tokens=40, temperature=0.1)
+        text = resp["choices"][0]["text"].strip().replace("\n", " ")
 
-    # De-duplicate sentences
-    seen, out = set(), []
-    for s in text.split(". "):
-        s = s.strip().rstrip(".")
-        if s and s not in seen:
-            seen.add(s)
-            out.append(s)
+        # De-duplicate sentences
+        seen, out = set(), []
+        for s in text.split(". "):
+            s = s.strip().rstrip(".")
+            if s and s not in seen:
+                seen.add(s)
+                out.append(s)
 
-    return ". ".join(out) + "."
+        return ". ".join(out) + "."
 
 def summarize_route(directions_json):
     try:

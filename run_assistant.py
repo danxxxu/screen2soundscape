@@ -1,4 +1,7 @@
 # run_assistant.py
+import os
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"  # Must be first, before importing torch
+
 import warnings
 import transformers
 warnings.filterwarnings("ignore")
@@ -7,6 +10,7 @@ transformers.logging.set_verbosity_error()
 import torch
 torch._C._jit_set_profiling_mode(False)
 torch._C._jit_set_profiling_executor(False)
+
 
 import requests
 import argparse
