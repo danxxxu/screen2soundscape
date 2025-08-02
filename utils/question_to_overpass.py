@@ -181,47 +181,30 @@ _osm_overpass = Overpass()
 _osm_nominatim = OSMToolsNominatim()
 
 def build_overpass_query(P):
-    if P.get("mode") == "boundary_lookup":
-        area_name = P["place_name"]
-        return _osm_overpass.query(
-            f'relation["boundary"="administrative"]["name"="{area_name}"]["admin_level"~"^(8|6|4)$"];out body;>;out skel qt;'
-        )
+    selector_parts = []
+    if P.get("tag_key") and P.get("tag_value"):
+        selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
+    if P.get("wheelchair_only"):
+        selector_parts.append('"wheelchair"="yes"')
+    if P.get("pet_friendly"):
+        selector_parts.append('"pets"="yes"')
+    if P.get("opening_hours_regex"):
+        selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
 
-    if P.get("mode") in ("generic", "route_check", "route_via"):
-        selector_parts = []
-        if P.get("tag_key") and P.get("tag_value"):
-            selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
-        if P.get("wheelchair_only"):
-            selector_parts.append('"wheelchair"="yes"')
-        if P.get("pet_friendly"):
-            selector_parts.append('"pets"="yes"')
-        if P.get("opening_hours_regex"):
-            selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
+    selector = " and ".join(selector_parts) if selector_parts else ""
 
-        selector = " and ".join(selector_parts) if selector_parts else None
+    # Use area if available
+    if P.get("place_name") and P["place_name"] != "user_location":
+        try:
+            area_id = _osm_nominatim.query(P["place_name"]).areaId()
+            return f'[out:json][timeout:25];(node(area:{area_id})[{selector}];way(area:{area_id})[{selector}];relation(area:{area_id})[{selector}];);out body;'
+        except Exception as e:
+            print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
 
-        area_id = None
-        if P.get("place_name") and P["place_name"] != "user_location":
-            try:
-                area_id = _osm_nominatim.query(P["place_name"]).areaId()
-            except Exception as e:
-                print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
+    # Otherwise use coordinates
+    if P.get("center") and P.get("radius"):
+        lat, lon = P["center"]
+        radius = P["radius"]
+        return f'[out:json][timeout:25];(node(around:{radius},{lat},{lon})[{selector}];way(around:{radius},{lat},{lon})[{selector}];relation(around:{radius},{lat},{lon})[{selector}];);out body;'
 
-        if area_id:
-            query = overpassQueryBuilder(
-                area=area_id,
-                elementType=["node", "way", "relation"],
-                out="body",
-                includeGeometry=False,
-                **({"selector": selector} if selector else {})
-            )
-        elif P.get("center") and P.get("radius"):
-            lat, lon = P["center"]
-            radius = P["radius"]
-            query = f"[out:json][timeout:25];(node(around:{radius},{lat},{lon}){f'[{selector}]' if selector else ''};way(around:{radius},{lat},{lon}){f'[{selector}]' if selector else ''};relation(around:{radius},{lat},{lon}){f'[{selector}]' if selector else ''};);out body;"
-        else:
-            raise ValueError("❌ Cannot build query: no area or coordinates available.")
-
-        return _osm_overpass.query(query)
-
-    raise ValueError(f"❌ Unsupported mode for OSMPythonTools: {P.get('mode')}")
+    raise ValueError("❌ Cannot build query: no area or coordinates available.")
