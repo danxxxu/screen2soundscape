@@ -39,46 +39,35 @@ SUPPORTED_SPEAKERS = {
 }
 
 
-
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
     Load a Piper TTS model for the given language/speaker.
-    Automatically downloads and copies required files if missing.
+    Automatically downloads into MODEL_DIR if missing.
     """
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
     model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
     config_path = os.path.join(MODEL_DIR, f"{speaker}.onnx.json")
 
-    # ✅ If either file is missing, try to download
+    # ✅ If files are missing, force download to MODEL_DIR
     if not (os.path.isfile(model_path) and os.path.isfile(config_path)):
         print(f"[piper] ⚠️ Model '{speaker}' not found locally. Attempting download...")
         try:
             subprocess.run(
-                ["python3", "-m", "piper.download_voices", speaker],
+                [
+                    "python3", "-m", "piper.download_voices",
+                    "--output", MODEL_DIR,
+                    speaker
+                ],
                 check=True
             )
-
-            # Find downloaded files in Piper's default location
-            voice_dir = os.path.expanduser("~/.local/share/piper/voices")
-            downloaded_files = glob.glob(os.path.join(voice_dir, "**", f"{speaker}*"), recursive=True)
-
-            if not downloaded_files:
-                raise FileNotFoundError(f"No files found for '{speaker}' in {voice_dir}")
-
-            # Copy both files (.onnx and .json) to MODEL_DIR
-            for f in downloaded_files:
-                dest = os.path.join(MODEL_DIR, os.path.basename(f))
-                shutil.copy(f, dest)
-                print(f"[piper] ✅ Copied {f} -> {dest}")
-
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
                 f"Failed to download Piper model '{speaker}'. "
                 f"Ensure 'piper' is installed and the speaker name is valid.\n{e}"
             )
 
-    # ✅ Load model (requires both files now present)
+    # ✅ Load model after confirmed download
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
         _piper_models[key] = PiperVoice.load(model_path, use_cuda=(DEVICE == "cuda"))
