@@ -1,4 +1,17 @@
 # utils/osm_tags.py
+import re
+
+def find_osm_tags(question: str):
+    """
+    Try to match user query against TAG_MAP keys.
+    Returns a dict of OSM tags or None if no match found.
+    """
+    q = question.lower()
+    for key, tags in TAG_MAP.items():
+        if re.search(rf"\b{re.escape(key)}\b", q):
+            return tags
+    return None
+
 
 TAG_MAP = {
     # --- Food & Drink ---
