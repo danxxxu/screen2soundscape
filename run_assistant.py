@@ -160,9 +160,18 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     # Step 6: Speak summary
     print("🕒 Step 6: Speaking response with TTS...")
     t11 = time.time()
-    speak(translated_summary, language=language or lang.upper(), speaker_key=speaker, speed=speed)
+
+    # capture the output path
+    output_path = speak(
+        translated_summary,
+        language=language or lang.upper(),
+        speaker_key=speaker,
+        speed=speed
+    )
+
     t12 = time.time()
     print(f"✅ Finished speaking.")
+    print(f"🔉 Output file: {output_path}")
     print(f"⏱️ Step 6 duration: {t12 - t11:.2f} seconds\n")
 
     total_time = t12 - t1
