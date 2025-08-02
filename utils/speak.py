@@ -8,6 +8,7 @@ import re
 import argparse
 import datetime
 from typing import Dict, Any
+import soundfile as sf
 
 import torch
 import torchaudio
@@ -50,18 +51,20 @@ def get_silero_model(language: str = 'en', speaker: str = 'lj_v2'):
 def clean_sentences(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
 
+
 def speak(
     text: str,
     language: str,
     speaker_key: str,
-    speed: float = 1.0,  # currently unused
+    speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR
 ) -> str:
     os.makedirs(output_dir, exist_ok=True)
 
-    # split and select speaker
     sentences = clean_sentences(text)
     lang_code = language.lower()[:2]
+
+    # Default speaker mapping
     SUPPORTED_SPEAKERS = {
         'en': 'lj_v2',
         'fr': 'gilles_v2',
@@ -72,10 +75,17 @@ def speak(
         'kk': 'aigul_v2',
         'uz': 'dilnavoz_v2'
     }
-    speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
-    model = get_silero_model(language=lang_code, speaker=speaker)
 
-    # build one long numpy array with 0.5s pre-silence + 0.3s between sentences
+    # ✅ Check if a custom TTS model is provided
+    if os.path.isfile(speaker_key):
+        print(f"[speak] Using custom TTS model: {speaker_key}")
+        model = torch.package.PackageImporter(speaker_key).load_pickle("tts_models", "model")
+        model.to(device)
+        model.eval()
+    else:
+        speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
+        model = get_silero_model(language=lang_code, speaker=speaker)
+
     sample_rate = 48000
     silence_start = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
     silence_between = np.zeros(int(0.3 * sample_rate), dtype=np.float32)
@@ -85,20 +95,19 @@ def speak(
         wav = model.apply_tts(sent, sample_rate=sample_rate)
         full_audio = np.concatenate([full_audio, np.array(wav, dtype=np.float32), silence_between])
 
-    # convert to tensor and save as MP3
-    waveform = torch.from_numpy(full_audio).unsqueeze(0).to(device)
+    # ✅ Apply speed factor
+    if speed != 1.0:
+        indices = np.arange(0, len(full_audio), speed)
+        indices = indices[indices < len(full_audio)].astype(int)
+        full_audio = full_audio[indices]
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    mp3_path = os.path.join(output_dir, f"tts_{timestamp}.mp3")
+    wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
+    sf.write(wav_path, full_audio, sample_rate)
 
-    torchaudio.save(
-        mp3_path,
-        waveform.cpu(),          # saving happens on CPU
-        sample_rate,
-        format="mp3"
-    )
+    print(f"[speak] ✅ Saved TTS to '{wav_path}'")
+    return wav_path
 
-    print(f"[speak] Saved Silero TTS to '{mp3_path}'")
-    return mp3_path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
