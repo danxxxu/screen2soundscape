@@ -18,18 +18,19 @@ from requests.exceptions import HTTPError
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 import torch
 
+from utils.osm_tags import TAG_MAP, find_osm_tags
 from utils.llama_singleton import get_llm
+_llm = get_llm()  # only used for generating the Overpass QL itself
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Constants & globals
 # ──────────────────────────────────────────────────────────────────────────────
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-_llm = get_llm()  # only used for generating the Overpass QL itself
 
-DEN_HAAG_CONTEXT = (
-    "All queries should be scoped to Den Haag (’s-Gravenhage), "
-    "admin_level=8, Netherlands."
-)
+# DEN_HAAG_CONTEXT = (
+#     "All queries should be scoped to Den Haag (’s-Gravenhage), "
+#     "admin_level=8, Netherlands."
+# )
 
 _LOCAL_SUMMARISER = None  # will be lazily initialised
 
@@ -101,19 +102,88 @@ def _baseline_sentence(items: List[str], total: int) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 # Core public functions
 # ──────────────────────────────────────────────────────────────────────────────
-def generate_overpass_query(question: str) -> str:
-    prompt = (
-        "You are an expert at writing Overpass QL for OpenStreetMap. "
-        f"{DEN_HAAG_CONTEXT}\n\n"
-        f"Question: \"{question}\"\n\n"
-        "Return ONLY the Overpass QL query (no explanation)."
-    )
-    resp = _llm(prompt=prompt, max_tokens=60, temperature=0.3, stop=[";export", "; //"])
+def generate_overpass_query(question: str, lat: float = None, lon: float = None, radius: int = 2000) -> str:
+    """
+    Generate an Overpass QL query.
+    1. Try TAG_MAP deterministic generation.
+    2. Fall back to LLM if no match found.
+    """
+    tags = find_osm_tags(question)
+
+    if tags:
+        # ✅ Deterministic query
+        conditions = "".join([f'["{k}"="{v}"]' for k, v in tags.items()])
+
+        if lat is not None and lon is not None:
+            query = f"""
+[out:json][timeout:25];
+(
+  node{conditions}(around:{radius},{lat},{lon});
+  way{conditions}(around:{radius},{lat},{lon});
+  relation{conditions}(around:{radius},{lat},{lon});
+);
+out center;
+"""
+        else:
+            # No coordinates, fallback to global search
+            query = f"""
+[out:json][timeout:25];
+(
+  node{conditions};
+  way{conditions};
+  relation{conditions};
+);
+out center;
+"""
+        return query.strip()
+
+    # ❌ No TAG_MAP match → use LLM
+    prompt = f"""
+You are an expert at writing Overpass QL queries for OpenStreetMap.
+Rules:
+- Always include `out center;` at the end.
+- Use relevant tags: `amenity`, `shop`, `tourism`, `leisure`, `highway`, `public_transport`.
+- Prefer `node` if you don't know the type; otherwise use `node` + `way`.
+- If coordinates are provided, use (around:{radius},{lat},{lon}).
+- Output ONLY the Overpass query (no explanation).
+
+Examples:
+Q: "Find coffee shops near Times Square"
+A:
+[out:json][timeout:25];
+(
+  node["amenity"="cafe"](around:1000,40.7580,-73.9855);
+);
+out center;
+
+Q: "Where are public toilets in Paris?"
+A:
+[out:json][timeout:25];
+(
+  node["amenity"="toilets"](area:3602204096);
+  way["amenity"="toilets"](area:3602204096);
+);
+out center;
+
+Question: "{question}"
+"""
+    resp = _llm(prompt=prompt, max_tokens=80, temperature=0.1)
     q = resp["choices"][0]["text"].strip()
     if not q.endswith(";"):
         q += "\n;"
     return q
 
+
+def find_osm_tags(question: str):
+    """
+    Try to match user query against TAG_MAP keys.
+    Returns a dict of OSM tags or None if no match found.
+    """
+    q = question.lower()
+    for key, tags in TAG_MAP.items():
+        if re.search(rf"\b{re.escape(key)}\b", q):
+            return tags
+    return None
 
 def run_overpass_query(query: str) -> dict:
     try:
