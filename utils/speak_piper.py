@@ -2,30 +2,30 @@ import os
 import re
 import argparse
 import datetime
+import subprocess
 from typing import Optional
 import soundfile as sf
 import numpy as np
 
-import subprocess
 import torch
 from piper.voice import PiperVoice
 
-# Base path
+# ========================
+# Config
+# ========================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "osm_assistant_speaker_audio")
+MODEL_DIR = os.path.join(BASE_DIR, "piper_models")
+os.makedirs(MODEL_DIR, exist_ok=True)
 
-# Pick GPU if available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-# Piper model cache
 _piper_models = {}
 
-# ✅ Preload default English voice if available
 DEFAULT_LANGUAGE = 'en'
-DEFAULT_SPEAKER = 'en_US-amy-low'  # Example Piper voice
+DEFAULT_SPEAKER = 'en_US-lessac-medium'  # ✅ safer default voice
 
 SUPPORTED_SPEAKERS = {
-    'en': 'en_US-amy-low',
+    'en': 'en_US-lessac-medium',
     'fr': 'fr_FR-siwis-low',
     'es': 'es_ES-carlfm-low',
     'de': 'de_DE-thorsten-low',
@@ -35,23 +35,19 @@ SUPPORTED_SPEAKERS = {
     'uz': 'uz_UZ-dilnavoz-low'
 }
 
-MODEL_DIR = os.path.join(BASE_DIR, "piper_models")
-
-os.makedirs(MODEL_DIR, exist_ok=True)
-
 
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
     Load a Piper TTS model for the given language/speaker.
-    Auto-downloads if missing.
+    Automatically downloads it if missing.
     """
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
     model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
 
-    # ✅ If model doesn't exist, attempt download
+    # ✅ Auto-download if missing
     if not os.path.isfile(model_path):
-        print(f"[piper] ⚠️ Model '{speaker}' not found. Attempting to download...")
+        print(f"[piper] ⚠️ Model '{speaker}' not found. Attempting download...")
         try:
             subprocess.run(
                 ["python3", "-m", "piper.download_voices", speaker],
@@ -63,17 +59,15 @@ def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
                 f"Ensure 'piper' is installed and the speaker name is valid.\n{e}"
             )
 
-    # ✅ Try loading model (cached)
+    # ✅ Load model into cache
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
         _piper_models[key] = PiperVoice.load(model_path, use_cuda=(DEVICE == "cuda"))
 
     return _piper_models[key]
 
+
 def clean_sentences(text: str):
-    """
-    Split text into sentences while preserving punctuation.
-    """
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
 
 
@@ -93,13 +87,12 @@ def speak(
 
     sentences = clean_sentences(text)
 
-    # ✅ Fast mode
     if len(sentences) > 1:
         print("[piper] ⚡ Fast mode: limiting to first sentence for speed")
         sentences = [sentences[0]]
 
     lang_code = language.lower()[:2]
-    speaker = SUPPORTED_SPEAKERS.get(lang_code, DEFAULT_SPEAKER)
+    speaker = speaker_key or SUPPORTED_SPEAKERS.get(lang_code, DEFAULT_SPEAKER)
 
     model = get_piper_model(language=lang_code, speaker=speaker)
 
@@ -135,23 +128,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("text", help="The text to speak.")
     parser.add_argument("--language", default="en", help="Language code (default: en).")
-    parser.add_argument(
-        "--speaker",
-        required=False,
-        help="Speaker key (one of the supported Piper voices in your models folder)"
-    )
-    parser.add_argument(
-        "--speed",
-        type=float,
-        default=1.0,
-        help="Speech speed multiplier."
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=DEFAULT_OUTPUT_DIR,
-        help="Where to save the final WAV."
-    )
+    parser.add_argument("--speaker", help="Speaker key (must exist in Piper voices).")
+    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier.")
+    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="Where to save the final WAV.")
     args = parser.parse_args()
+
     speak(
         text=args.text,
         language=args.language,
