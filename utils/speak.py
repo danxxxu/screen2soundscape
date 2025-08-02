@@ -88,7 +88,14 @@ def speak(
     print("[speak] ✅ Starting synthesis")
     for sent in sentences:
         wav = model.apply_tts(sent, sample_rate=sample_rate)
-        full_audio = np.concatenate([full_audio, np.array(wav, dtype=np.float32), silence_between])
+        # Handle unexpected return types
+        if isinstance(wav, list):
+            wav = np.concatenate(wav)
+        wav = np.array(wav, dtype=np.float32).flatten()
+        if wav.size == 0:
+            print(f"[speak] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
+            continue
+        full_audio = np.concatenate([full_audio, wav, silence_between])
 
     if speed != 1.0:
         indices = np.arange(0, len(full_audio), speed)
