@@ -50,19 +50,15 @@ except Exception as e:
     print(f"[speak] ⚠️ Failed to preload Silero model: {e}")
 
 def get_silero_model(language: str = 'en', speaker: str = 'lj_v2'):
-    key = f"{language}_{speaker}"
-    if key in _silero_models:
-        return _silero_models[key]
-    print(f"[speak] ⏬ Loading additional Silero model: {language}/{speaker}")
-    model, _ = torch.hub.load(
-        repo_or_dir='snakers4/silero-models',
-        model='silero_tts',
-        language=language,
-        speaker=speaker
-    )
-    model.to(device)
-    _silero_models[key] = model
-    return model
+    key = f"{language}_{speaker}".lower()
+    if key not in _silero_models:
+        print(f"[speak] ⏬ Loading Silero model: {key}")
+        model, _ = torch.hub.load('snakers4/silero-models', 'silero_tts',
+                                  language=language, speaker=speaker)
+        model.to(device)
+        _silero_models[key] = model
+    return _silero_models[key]
+
 
 
 def clean_sentences(text: str):
@@ -80,6 +76,12 @@ def speak(
     os.makedirs(output_dir, exist_ok=True)
 
     sentences = clean_sentences(text)
+
+    # ✅ Fast mode snippet
+    if len(sentences) > 1:
+        print("[speak] ⚡ Fast mode: limiting to first sentence for speed")
+        sentences = [sentences[0]]
+
     lang_code = language.lower()[:2]
 
     SUPPORTED_SPEAKERS = {
@@ -94,11 +96,7 @@ def speak(
     }
 
     speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
-    print(f"[speak] ✅ Loading Silero model for {lang_code}/{speaker}")
-    print("[DEBUG] Loading Silero model...")
-    model = get_silero_model(language=lang_code, speaker=speaker)
-    print("[DEBUG] Model loaded successfully.")
-
+    model = get_silero_model(language=lang_code.lower(), speaker=speaker)
 
     sample_rate = 48000
     full_audio = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
@@ -115,6 +113,7 @@ def speak(
             print(f"[speak] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
             continue
         full_audio = np.concatenate([full_audio, wav, silence_between])
+
 
     if speed != 1.0:
         indices = np.arange(0, len(full_audio), speed)
