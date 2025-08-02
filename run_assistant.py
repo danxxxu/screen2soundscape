@@ -20,7 +20,7 @@ from langdetect import detect
 from deep_translator import GoogleTranslator
 from utils.transcribe import record_and_transcribe
 # from utils.speak_silero import speak
-from utils.speak_tf import speak
+from utils.speak_piper import speak
 from utils.question_to_overpass import (
     parse_question,
     build_overpass_query)
