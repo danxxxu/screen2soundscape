@@ -108,20 +108,25 @@ def speak(
 ) -> str:
     """
     Convert text to speech using Coqui Piper.
-    Can return a NumPy array for streaming or save as MP3.
+    Splits long sentences, retries if audio is empty.
     """
     print("[piper] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
 
-    sentences = clean_sentences(text)
-
-    if len(sentences) > 1:
-        print("[piper] ⚡ Fast mode: limiting to first sentence for speed")
-        sentences = [sentences[0]]
+    # Break text into smaller chunks (≤180 chars)
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = [s.strip() for s in sentences if s.strip()]
+    processed_sentences = []
+    for s in sentences:
+        if len(s) > 180:
+            # split by comma if too long
+            processed_sentences.extend([chunk.strip() for chunk in re.split(r'[,:;]', s) if chunk.strip()])
+        else:
+            processed_sentences.append(s)
+    sentences = processed_sentences or [text[:150]]
 
     lang_code = language.lower()[:2]
     speaker = speaker_key or SUPPORTED_SPEAKERS.get(lang_code, DEFAULT_SPEAKER)
-
     model = get_piper_model(language=lang_code, speaker=speaker)
 
     sample_rate = 22050
@@ -132,26 +137,28 @@ def speak(
     for sent in sentences:
         audio_chunks = list(model.synthesize(sent))
         if not audio_chunks:
-            print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
+            print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', retrying with truncated text...")
+            truncated = sent[:120]
+            audio_chunks = list(model.synthesize(truncated)) if truncated else []
+
+        if not audio_chunks:
+            print(f"[piper] ❌ Skipping sentence: '{sent}' (no audio generated)")
             continue
 
-        # ✅ Extract bytes from AudioChunk objects
         audio_data = b''.join(chunk.data for chunk in audio_chunks if hasattr(chunk, "data"))
         if not audio_data:
-            print(f"[piper] ⚠️ No audio data in chunks for sentence: '{sent}', skipping.")
+            print(f"[piper] ⚠️ No audio data for: '{sent}', skipping.")
             continue
 
         wav = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-
         if wav.size == 0:
-            print(f"[piper] ⚠️ Empty waveform returned for sentence: '{sent}', skipping.")
+            print(f"[piper] ⚠️ Empty waveform returned for: '{sent}', skipping.")
             continue
 
         full_audio = np.concatenate([full_audio, wav, silence_between])
 
-
     if full_audio.size == 0:
-        raise RuntimeError("No audio was generated for the given text.")
+        raise RuntimeError("No audio was generated for the given text, even after retries.")
 
     if speed != 1.0:
         indices = np.arange(0, len(full_audio), speed)
@@ -177,11 +184,7 @@ def speak(
 
     print(f"[piper] ✅ Saved TTS to '{output_path}'")
 
-    # ✅ Return audio for streaming or file path
-    if return_audio:
-        return full_audio, sample_rate
-    else:
-        return output_path
+    return (full_audio, sample_rate) if return_audio else output_path
 
 
 if __name__ == "__main__":
