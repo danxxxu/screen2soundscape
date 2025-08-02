@@ -2,7 +2,7 @@ import os
 import sys
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 # silence stderr from torch hub
-sys.stderr = open(os.devnull, 'w')
+# sys.stderr = open(os.devnull, 'w')
 
 import re
 import argparse
@@ -76,7 +76,10 @@ def speak(
 
     speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
     print(f"[speak] ✅ Loading Silero model for {lang_code}/{speaker}")
+    print("[DEBUG] Loading Silero model...")
     model = get_silero_model(language=lang_code, speaker=speaker)
+    print("[DEBUG] Model loaded successfully.")
+
 
     sample_rate = 48000
     full_audio = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
