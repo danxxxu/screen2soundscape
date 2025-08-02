@@ -171,6 +171,12 @@ def speak(
             ascii_text = "".join([c for c in ascii_text if not unicodedata.combining(c)])
             ascii_text = re.sub(r"[^a-zA-Z0-9\s.,'?!]", "", ascii_text)
             audio_chunks = list(model.synthesize(ascii_text)) if ascii_text else []
+            
+        if not audio_chunks:
+            print(f"[piper] ⚠️ Retry: simplifying text for '{sent_clean}'")
+            retry_text = re.sub(r"[^a-zA-Z0-9\s.,'?!]", "", sent_clean)
+            audio_chunks = list(model.synthesize(retry_text))
+
 
         if not audio_chunks:
             print(f"[piper] ❌ Skipping sentence: '{sent}' (no audio generated)")
