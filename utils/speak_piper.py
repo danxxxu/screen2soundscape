@@ -123,15 +123,20 @@ def speak(
             print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
             continue
 
-        # Each chunk is bytes -> convert to int16 array
-        audio_data = b''.join(audio_chunks)
+        # ✅ Extract bytes from AudioChunk objects
+        audio_data = b''.join(chunk.data for chunk in audio_chunks if hasattr(chunk, "data"))
+        if not audio_data:
+            print(f"[piper] ⚠️ No audio data in chunks for sentence: '{sent}', skipping.")
+            continue
+
         wav = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
         if wav.size == 0:
-            print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
+            print(f"[piper] ⚠️ Empty waveform returned for sentence: '{sent}', skipping.")
             continue
 
         full_audio = np.concatenate([full_audio, wav, silence_between])
+
 
     if speed != 1.0:
         indices = np.arange(0, len(full_audio), speed)
