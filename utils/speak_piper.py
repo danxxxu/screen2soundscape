@@ -38,42 +38,50 @@ SUPPORTED_SPEAKERS = {
     'uz': 'uz_UZ-dilnavoz-low'
 }
 
-
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
     Load a Piper TTS model for the given language/speaker.
-    Automatically downloads into MODEL_DIR if missing.
+    Auto-downloads into MODEL_DIR using --data-dir if missing.
     """
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
     model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
     config_path = os.path.join(MODEL_DIR, f"{speaker}.onnx.json")
 
-    # ✅ If files are missing, force download to MODEL_DIR
+    # ✅ Download if files missing
     if not (os.path.isfile(model_path) and os.path.isfile(config_path)):
         print(f"[piper] ⚠️ Model '{speaker}' not found locally. Attempting download...")
         try:
             subprocess.run(
                 [
                     "python3", "-m", "piper.download_voices",
-                    "--output", MODEL_DIR,
+                    "--data-dir", MODEL_DIR,
                     speaker
                 ],
                 check=True
             )
+
+            # Check download success
+            downloaded_files = glob.glob(os.path.join(MODEL_DIR, f"{speaker}*"))
+            if not downloaded_files:
+                raise FileNotFoundError(
+                    f"No downloaded files found for '{speaker}' in {MODEL_DIR}'"
+                )
+
+            print(f"[piper] ✅ Download complete: {downloaded_files}")
+
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
                 f"Failed to download Piper model '{speaker}'. "
                 f"Ensure 'piper' is installed and the speaker name is valid.\n{e}"
             )
 
-    # ✅ Load model after confirmed download
+    # ✅ Load the model
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
         _piper_models[key] = PiperVoice.load(model_path, use_cuda=(DEVICE == "cuda"))
 
     return _piper_models[key]
-
 
 def clean_sentences(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
