@@ -29,13 +29,31 @@ DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "osm_assistant_speaker_audio")
 # pick GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# cache for Silero models
+# Global model cache
 _silero_models: Dict[str, Any] = {}
+
+# ✅ Preload default English model immediately
+DEFAULT_LANGUAGE = 'en'
+DEFAULT_SPEAKER = 'lj_v2'
+
+try:
+    print("[speak] 🔄 Preloading Silero TTS model...")
+    _silero_models[f"{DEFAULT_LANGUAGE}_{DEFAULT_SPEAKER}"], _ = torch.hub.load(
+        repo_or_dir='snakers4/silero-models',
+        model='silero_tts',
+        language=DEFAULT_LANGUAGE,
+        speaker=DEFAULT_SPEAKER
+    )
+    _silero_models[f"{DEFAULT_LANGUAGE}_{DEFAULT_SPEAKER}"].to(device)
+    print("[speak] ✅ Default Silero model preloaded")
+except Exception as e:
+    print(f"[speak] ⚠️ Failed to preload Silero model: {e}")
 
 def get_silero_model(language: str = 'en', speaker: str = 'lj_v2'):
     key = f"{language}_{speaker}"
     if key in _silero_models:
         return _silero_models[key]
+    print(f"[speak] ⏬ Loading additional Silero model: {language}/{speaker}")
     model, _ = torch.hub.load(
         repo_or_dir='snakers4/silero-models',
         model='silero_tts',
@@ -43,9 +61,9 @@ def get_silero_model(language: str = 'en', speaker: str = 'lj_v2'):
         speaker=speaker
     )
     model.to(device)
-    # model.eval()
     _silero_models[key] = model
     return model
+
 
 def clean_sentences(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
@@ -55,7 +73,8 @@ def speak(
     language: str,
     speaker_key: str,
     speed: float = 1.0,
-    output_dir: str = DEFAULT_OUTPUT_DIR
+    output_dir: str = DEFAULT_OUTPUT_DIR,
+    return_audio: bool = False
 ) -> str:
     print("[speak] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
@@ -107,7 +126,11 @@ def speak(
     sf.write(wav_path, full_audio, sample_rate)
 
     print(f"[speak] ✅ Saved TTS to '{wav_path}'")
-    return wav_path
+    if return_audio:
+        return full_audio, sample_rate
+    else:
+        sf.write(wav_path, full_audio, sample_rate)
+        return wav_path
 
 
 
