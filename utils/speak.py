@@ -60,11 +60,9 @@ def speak(
     output_dir: str = DEFAULT_OUTPUT_DIR
 ) -> str:
     os.makedirs(output_dir, exist_ok=True)
-
     sentences = clean_sentences(text)
     lang_code = language.lower()[:2]
 
-    # Default speaker mapping
     SUPPORTED_SPEAKERS = {
         'en': 'lj_v2',
         'fr': 'gilles_v2',
@@ -76,16 +74,21 @@ def speak(
         'uz': 'dilnavoz_v2'
     }
 
-    # ✅ Check if a custom TTS model is provided
-    if os.path.isfile(speaker_key):
-        print(f"[speak] Using custom TTS model: {speaker_key}")
-        model = torch.package.PackageImporter(speaker_key).load_pickle("tts_models", "model")
-        model.to(device)
-        model.eval()
-    else:
-        speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
-        model = get_silero_model(language=lang_code, speaker=speaker)
+    # ✅ Load default model
+    speaker = SUPPORTED_SPEAKERS.get(lang_code, 'lj_v2')
+    model = get_silero_model(language=lang_code, speaker=speaker)
 
+    # ✅ If a valid custom model file is provided, load weights
+    if os.path.isfile(speaker_key):
+        try:
+            print(f"[speak] Loading custom weights from {speaker_key}")
+            state_dict = torch.load(speaker_key, map_location=device)
+            model.load_state_dict(state_dict, strict=False)
+        except Exception as e:
+            print(f"[speak] ⚠️ Failed to load custom model weights: {e}")
+            print("[speak] Falling back to default speaker.")
+
+    # Build audio
     sample_rate = 48000
     silence_start = np.zeros(int(0.5 * sample_rate), dtype=np.float32)
     silence_between = np.zeros(int(0.3 * sample_rate), dtype=np.float32)
@@ -107,6 +110,7 @@ def speak(
 
     print(f"[speak] ✅ Saved TTS to '{wav_path}'")
     return wav_path
+
 
 
 if __name__ == "__main__":
