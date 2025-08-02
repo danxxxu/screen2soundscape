@@ -20,13 +20,21 @@ from langdetect import detect
 from deep_translator import GoogleTranslator
 from utils.transcribe import record_and_transcribe
 from utils.speak import speak
+
 from utils.question_to_overpass import (
     parse_question,
     build_overpass_query)
-from utils.overpass_to_osm import (
+# from utils.overpass_to_osm_llama import (
+#     run_overpass_query,
+#     summarize_results,
+#     summarize_route
+# )
+from utils.overpass_to_osm import warmup_summariser
+warmup_summariser() 
+
+from utils.overpass_to_osm_flan import (
     run_overpass_query,
     summarize_results,
-    summarize_results_small,
     summarize_route
 )
 import time
@@ -130,7 +138,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     print("🕒 Step 5: Summarizing results with LLM...")
     t9 = time.time()
     # summary = summarize_results(question, results)
-    summary = summarize_results_small(question, results)
+    summary = summarize_results(question, results)
     t10 = time.time()
     print("✅ Summary (English):")
     print(summary)
