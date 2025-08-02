@@ -1,4 +1,15 @@
 import os
+# Suppress TensorFlow logs
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"      # 0=all logs, 1=filter INFO, 2=filter WARNING, 3=only errors
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"     # Disable oneDNN messages
+
+# Optional: Suppress absl and other noisy logs
+os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
+
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+
+
 import re
 import argparse
 import datetime
