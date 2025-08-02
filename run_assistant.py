@@ -26,6 +26,7 @@ from utils.question_to_overpass import (
 from utils.overpass_to_osm import (
     run_overpass_query,
     summarize_results,
+    summarize_results_small,
     summarize_route
 )
 import time
@@ -128,7 +129,8 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     # Step 5: Summarize results
     print("🕒 Step 5: Summarizing results with LLM...")
     t9 = time.time()
-    summary = summarize_results(question, results)
+    # summary = summarize_results(question, results)
+    summary = summarize_results_small(question, results)
     t10 = time.time()
     print("✅ Summary (English):")
     print(summary)
