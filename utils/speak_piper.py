@@ -38,6 +38,41 @@ _piper_models = {}
 # -------------------------
 # Helpers
 # -------------------------
+def find_best_piper_model(base_path, language, speaker):
+    """
+    Find the highest-quality Piper model for a given language and speaker.
+    Priority: high → medium → low
+    """
+    # Map short language code to Piper folder structure
+    lang_map = {
+        "en": "en/en_US",
+        "fr": "fr/fr_FR",
+        "de": "de/de_DE",
+        "es": "es/es_ES",
+        "it": "it/it_IT",
+        "pt": "pt/pt_PT",
+        "nl": "nl/nl_NL",
+        "zh": "zh/zh_CN"
+        # other languages can be added here
+    }
+    
+    lang_path = lang_map.get(language.lower())
+    if not lang_path:
+        raise FileNotFoundError(f"No folder mapping found for language '{language}'")
+    
+    model_dir = os.path.join(base_path, lang_path, speaker)
+    if not os.path.isdir(model_dir):
+        raise FileNotFoundError(f"No speaker folder '{speaker}' found in {model_dir}")
+    
+    # Search priority order
+    for quality in ["high", "medium", "low"]:
+        search_path = os.path.join(model_dir, quality, "*.onnx")
+        matches = glob.glob(search_path)
+        if matches:
+            return matches[0]  # return first matching model
+    
+    raise FileNotFoundError(f"No model found for {language}/{speaker}")
+
 def clean_text(text: str, lang: str) -> str:
     """Normalize text. Remove accents only for English."""
     text = text.replace("’", "'").replace("‘", "'").replace("`", "'")

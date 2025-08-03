@@ -30,7 +30,7 @@ from langdetect import detect
 from deep_translator import GoogleTranslator
 from utils.transcribe import record_and_transcribe
 # from utils.speak_silero import speak
-from utils.speak_piper import speak
+from utils.speak_piper import speak, find_best_piper_model
 from utils.question_to_overpass import (
     parse_question,
     build_overpass_query)
@@ -78,7 +78,7 @@ def get_directions(start, end, mode="walk"):
     return response.json()
 
 
-def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=None):
+def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=None, output_mode="file"):
     if not speaker:
         print("❌ You must specify a --speaker.")
         return
@@ -171,13 +171,13 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     print("🕒 Step 6: Speaking response with TTS...")
     t11 = time.time()
 
-    # capture the output path
+    model_path = find_best_piper_model("piper_models", language, speaker)
     output_path = speak(
         translated_summary,
         language=language or lang.upper(),
-        speaker_key=speaker,
+        speaker_key=model_path,  # pass actual model path
         speed=speed,
-        output_mode="file"
+        output_mode=output_mode
     )
 
     t12 = time.time()
@@ -192,7 +192,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the OSM voice assistant.")
-    parser.add_argument("--speaker", type=str, default="arnold", help="Speaker name (matches speaker folder)")
+    parser.add_argument("--speaker", type=str, default="amy", help="Speaker name (matches speaker folder)")
     parser.add_argument("--language", type=str, default="EN_NEWEST", help="Language key for TTS (used if not detected)")
     parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
     parser.add_argument("--save-json", action="store_true", help="Save raw Overpass results to JSON")
@@ -200,6 +200,7 @@ if __name__ == "__main__":
     parser.add_argument("--text-file", type=str, help="Provide a question via a text file instead of recording")
     parser.add_argument("--lat", type=float, help="Latitude of the current user location")
     parser.add_argument("--lon", type=float, help="Longitude of the current user location")
+    parser.add_argument("--output-mode", type=str, choices=["file", "stream"], default="file",help="Output mode for TTS: 'file' or 'stream' (default: file)")
 
 
     args = parser.parse_args()
