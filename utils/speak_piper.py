@@ -91,29 +91,23 @@ def speak(
     speaker_key: str = None,
     speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR,
-    return_stream_mp3: bool = False
+    output_mode: str = "file"  # "file" or "stream"
 ):
     """
     Convert text to speech using Piper.
-    - If return_stream_mp3=True → returns MP3 bytes
-    - Otherwise saves to MP3 file and returns file path
+    - output_mode="stream" → returns MP3 bytes
+    - output_mode="file" → saves MP3 to file and returns file path
     """
-
     print("[piper] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
 
     lang_code = language.lower()[:2]
     speaker = speaker_key or SUPPORTED_SPEAKERS.get(lang_code, DEFAULT_SPEAKER)
-
     model = get_piper_model(language=lang_code, speaker=speaker)
 
     text = clean_text(text, lang_code)
     chunks = chunk_text(text)
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
-
-    # Convert speed -> length_scale
     length_scale = max(0.5, min(3.0, 1.0 / speed)) if speed > 0 else 1.0
     syn_config = SynthesisConfig(
         volume=1.0,
@@ -123,26 +117,29 @@ def speak(
         normalize_audio=True
     )
 
-    # Write WAV
-    with wave.open(output_path, "wb") as wav_file:
-        for chunk in chunks:
-            print(f"[piper] ▶ Synthesizing chunk: {chunk}")
-            model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
-
-    # If requested, return MP3 stream instead of saving
-    if return_stream_mp3:
-        audio_segment = AudioSegment.from_wav(output_path)
+    # Use in-memory buffer for stream mode
+    if output_mode == "stream":
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, "wb") as wav_file:
+            for chunk in chunks:
+                model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
+        wav_buffer.seek(0)
+        audio_segment = AudioSegment.from_file(wav_buffer, format="wav")
         mp3_buffer = io.BytesIO()
         audio_segment.export(mp3_buffer, format="mp3")
-        mp3_buffer.seek(0)
-        os.remove(output_path)
-        return mp3_buffer.read()
+        return mp3_buffer.getvalue()
 
-    # Otherwise, save MP3 file
-    audio_segment = AudioSegment.from_wav(output_path)
-    mp3_path = output_path.replace(".wav", ".mp3")
-    audio_segment.export(mp3_path, format="mp3")
-    os.remove(output_path)
+    # File mode
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
+    with wave.open(wav_path, "wb") as wav_file:
+        for chunk in chunks:
+            model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
+
+    mp3_path = wav_path.replace(".wav", ".mp3")
+    AudioSegment.from_wav(wav_path).export(mp3_path, format="mp3")
+    os.remove(wav_path)
 
     print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
     return mp3_path
+
