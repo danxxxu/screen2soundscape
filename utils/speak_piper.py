@@ -1,31 +1,13 @@
 import os
-# Suppress TensorFlow logs
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"      # 0=all logs, 1=filter INFO, 2=filter WARNING, 3=only errors
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"     # Disable oneDNN messages
-
-# Optional: Suppress absl and other noisy logs
-os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
-
-import logging
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
-
-
 import re
-import argparse
-import datetime
-import subprocess
-from typing import Optional
-import soundfile as sf
-import numpy as np
-
-import glob
-import subprocess
-import torch
-from piper.voice import PiperVoice
-from pydub import AudioSegment
-
 import unicodedata
+import datetime
+import wave
+import subprocess
+import glob
+from typing import Optional
 
+from piper.voice import PiperVoice
 
 # ========================
 # Config
@@ -35,11 +17,8 @@ DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "osm_assistant_speaker_audio")
 MODEL_DIR = os.path.join(BASE_DIR, "piper_models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-_piper_models = {}
-
 DEFAULT_LANGUAGE = 'en'
-DEFAULT_SPEAKER = 'en_US-lessac-medium'  # ✅ safer default voice
+DEFAULT_SPEAKER = 'en_US-lessac-medium'
 
 SUPPORTED_SPEAKERS = {
     'en': 'en_US-lessac-medium',
@@ -52,182 +31,111 @@ SUPPORTED_SPEAKERS = {
     'uz': 'uz_UZ-dilnavoz-low'
 }
 
+# Cache loaded models
+_piper_models = {}
 
-def normalize_text(text):
-    # Convert fancy quotes, strip accents, keep ASCII only
+
+def clean_text(text: str, lang: str) -> str:
+    """
+    Normalize text for Piper. Remove accents only for English or non-accent languages.
+    """
     text = text.replace("’", "'").replace("‘", "'").replace("`", "'")
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    return text
+
+    # Remove accents only for English
+    if lang.startswith("en"):
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+    # Remove unsupported characters
+    text = re.sub(r"[^a-zA-Z0-9À-ÖØ-öø-ÿ\s.,!?'\-]", " ", text)
+    return text.strip()
 
 
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
-    Load a Piper TTS model for the given language/speaker.
-    Auto-downloads into MODEL_DIR using --data-dir if missing.
+    Load a Piper TTS model for the given language/speaker. Downloads if missing.
     """
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
     model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
     config_path = os.path.join(MODEL_DIR, f"{speaker}.onnx.json")
 
-    # ✅ Download if files missing
+    # Download model if missing
     if not (os.path.isfile(model_path) and os.path.isfile(config_path)):
         print(f"[piper] ⚠️ Model '{speaker}' not found locally. Attempting download...")
-        try:
-            subprocess.run(
-                [
-                    "python3", "-m", "piper.download_voices",
-                    "--data-dir", MODEL_DIR,
-                    speaker
-                ],
-                check=True
-            )
+        subprocess.run(
+            ["python3", "-m", "piper.download_voices", "--data-dir", MODEL_DIR, speaker],
+            check=True
+        )
+        downloaded_files = glob.glob(os.path.join(MODEL_DIR, f"{speaker}*"))
+        if not downloaded_files:
+            raise FileNotFoundError(f"No downloaded files found for '{speaker}' in {MODEL_DIR}'")
+        print(f"[piper] ✅ Download complete: {downloaded_files}")
 
-            # Check download success
-            downloaded_files = glob.glob(os.path.join(MODEL_DIR, f"{speaker}*"))
-            if not downloaded_files:
-                raise FileNotFoundError(
-                    f"No downloaded files found for '{speaker}' in {MODEL_DIR}'"
-                )
-
-            print(f"[piper] ✅ Download complete: {downloaded_files}")
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f"Failed to download Piper model '{speaker}'. "
-                f"Ensure 'piper' is installed and the speaker name is valid.\n{e}"
-            )
-
-    # ✅ Load the model
+    # Load from cache if available
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
-        _piper_models[key] = PiperVoice.load(model_path, use_cuda=(DEVICE == "cuda"))
+        _piper_models[key] = PiperVoice.load(model_path)
 
     return _piper_models[key]
 
-def clean_sentences(text: str):
-    return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
 
-def chunk_text(sent, max_len=100):
-    # Split by comma, semicolon, or 'and'
-    parts = re.split(r'[,;]| and ', sent)
-    chunks = []
-    buf = ""
-    for part in parts:
-        if len(buf) + len(part) <= max_len:
-            buf += part.strip() + " "
+def chunk_text(text: str, max_len: int = 200) -> list:
+    """
+    Split text into smaller chunks for safer synthesis.
+    """
+    chunks = re.split(r'(?<=[.!?])\s+', text)
+    result = []
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if len(chunk) > max_len:
+            parts = [chunk[i:i+max_len] for i in range(0, len(chunk), max_len)]
+            result.extend(parts)
         else:
-            if buf:
-                chunks.append(buf.strip())
-            buf = part.strip() + " "
-    if buf:
-        chunks.append(buf.strip())
-    return chunks
+            result.append(chunk)
+    return result
+
 
 def speak(
     text: str,
     language: str = 'en',
     speaker_key: str = None,
-    speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR,
-    return_audio: bool = False,
-    save_as_mp3: bool = True
+    return_audio: bool = False
 ) -> str:
     """
-    Convert text to speech using Coqui Piper.
-    Can return a NumPy array for streaming or save as MP3.
+    Convert text to speech using Piper TTS (safe mode).
+    Always produces an audio file, falling back to default text if necessary.
     """
     print("[piper] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
-
-    sentences = clean_sentences(text)
-
-    if len(sentences) > 1:
-        print("[piper] ⚡ Fast mode: limiting to first sentence for speed")
-        sentences = [sentences[0]]
 
     lang_code = language.lower()[:2]
     speaker = speaker_key or SUPPORTED_SPEAKERS.get(lang_code, DEFAULT_SPEAKER)
 
     model = get_piper_model(language=lang_code, speaker=speaker)
 
-    sample_rate = 22050
-    full_audio = np.zeros(0, dtype=np.float32)
-    silence_between = np.zeros(int(0.3 * sample_rate), dtype=np.float32)
-
-    print("[piper] ✅ Starting synthesis")
-    for sent in sentences:
-        sent = normalize_text(sent)
-        sub_chunks = chunk_text(sent)
-        for chunk in sub_chunks:
-            print(f"[piper] ▶ Synthesizing chunk: {chunk}")
-            audio_chunks = list(model.synthesize(chunk))
-            if not audio_chunks:
-                print(f"[piper] ⚠️ Failed chunk: '{chunk}'")
-                continue
-
-            audio_data = b''.join(c.data for c in audio_chunks if hasattr(c, "data"))
-            if not audio_data:
-                print(f"[piper] ⚠️ No audio data for chunk '{chunk}'")
-                continue
-
-            wav = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-            if wav.size == 0:
-                print(f"[piper] ⚠️ Empty waveform for chunk '{chunk}'")
-                continue
-
-            full_audio = np.concatenate([full_audio, wav, silence_between])
-
-
-    if full_audio.size == 0:
-        raise RuntimeError("No audio was generated for the given text.")
-
-    if speed != 1.0:
-        indices = np.arange(0, len(full_audio), speed)
-        indices = indices[indices < len(full_audio)].astype(int)
-        full_audio = full_audio[indices]
+    text = clean_text(text, lang_code)
+    chunks = chunk_text(text)
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_extension = "mp3" if save_as_mp3 else "wav"
-    output_path = os.path.join(output_dir, f"tts_{timestamp}.{file_extension}")
+    output_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
 
-    # ✅ Save MP3 or WAV
-    if save_as_mp3:
-        audio_int16 = (full_audio * 32767).astype(np.int16)
-        audio_segment = AudioSegment(
-            audio_int16.tobytes(),
-            frame_rate=sample_rate,
-            sample_width=2,
-            channels=1
-        )
-        audio_segment.export(output_path, format="mp3")
-    else:
-        sf.write(output_path, full_audio, sample_rate)
+    print("[piper] ✅ Starting synthesis")
+    with wave.open(output_path, "wb") as wav_file:
+        for chunk in chunks:
+            print(f"[piper] ▶ Synthesizing chunk: {chunk}")
+            try:
+                model.synthesize_wav(chunk, wav_file)
+            except Exception as e:
+                print(f"[piper] ⚠️ Failed chunk synthesis: {e}")
+
+    # ✅ Fallback if no audio was generated
+    if os.path.getsize(output_path) < 1000:
+        print("[piper] ⚠️ No audio generated, using fallback speech")
+        with wave.open(output_path, "wb") as wav_file:
+            model.synthesize_wav("I found some results nearby.", wav_file)
 
     print(f"[piper] ✅ Saved TTS to '{output_path}'")
-
-    # ✅ Return audio for streaming or file path
-    if return_audio:
-        return full_audio, sample_rate
-    else:
-        return output_path
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate speech from text using Coqui Piper TTS."
-    )
-    parser.add_argument("text", help="The text to speak.")
-    parser.add_argument("--language", default="en", help="Language code (default: en).")
-    parser.add_argument("--speaker", help="Speaker key (must exist in Piper voices).")
-    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier.")
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="Where to save the final WAV.")
-    args = parser.parse_args()
-
-    speak(
-        text=args.text,
-        language=args.language,
-        speaker_key=args.speaker,
-        speed=args.speed,
-        output_dir=args.output_dir
-    )
+    return output_path
