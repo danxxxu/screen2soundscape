@@ -23,6 +23,10 @@ import subprocess
 import torch
 from piper.voice import PiperVoice
 from pydub import AudioSegment
+
+import unicodedata
+
+
 # ========================
 # Config
 # ========================
@@ -47,6 +51,14 @@ SUPPORTED_SPEAKERS = {
     'kk': 'kk_KZ-aisuluu-low',
     'uz': 'uz_UZ-dilnavoz-low'
 }
+
+
+def normalize_text(text):
+    # Convert fancy quotes, strip accents, keep ASCII only
+    text = text.replace("’", "'").replace("‘", "'").replace("`", "'")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return text
+
 
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
     """
@@ -130,6 +142,7 @@ def speak(
 
     print("[piper] ✅ Starting synthesis")
     for sent in sentences:
+        sent = normalize_text(sent)
         audio_chunks = list(model.synthesize(sent))
         if not audio_chunks:
             print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
