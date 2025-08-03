@@ -82,22 +82,26 @@ def clean_text(text: str, lang: str) -> str:
 
 
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
-    """Load a Piper TTS model (auto-download if missing)."""
-    speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
-    key = f"{language}_{speaker}".lower()
-    model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
-    config_path = os.path.join(MODEL_DIR, f"{speaker}.onnx.json")
+    """
+    Load a Piper TTS model from a given speaker name or a full .onnx path.
+    """
+    # If speaker is a path, load directly
+    if speaker and speaker.endswith(".onnx") and os.path.isfile(speaker):
+        model_path = speaker
+        config_path = model_path + ".json"
+    else:
+        # Fallback to default flat lookup
+        speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
+        model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
+        config_path = os.path.join(MODEL_DIR, f"{speaker}.onnx.json")
 
-    if not (os.path.isfile(model_path) and os.path.isfile(config_path)):
-        print(f"[piper] ⚠️ Model '{speaker}' not found locally. Attempting download...")
-        subprocess.run(["python3", "-m", "piper.download_voices", "--data-dir", MODEL_DIR, speaker], check=True)
-        downloaded_files = glob.glob(os.path.join(MODEL_DIR, f"{speaker}*"))
-        if not downloaded_files:
-            raise FileNotFoundError(f"No downloaded files found for '{speaker}' in {MODEL_DIR}'")
-        print(f"[piper] ✅ Download complete: {downloaded_files}")
+        if not (os.path.isfile(model_path) and os.path.isfile(config_path)):
+            print(f"[piper] ⚠️ Model '{speaker}' not found locally. Attempting download...")
+            subprocess.run(["python3", "-m", "piper.download_voices", "--data-dir", MODEL_DIR, speaker], check=True)
 
+    key = model_path.lower()
     if key not in _piper_models:
-        print(f"[piper] ⏬ Loading Piper model: {speaker}")
+        print(f"[piper] ⏬ Loading Piper model: {model_path}")
         _piper_models[key] = PiperVoice.load(model_path, use_cuda=torch.cuda.is_available())
 
     return _piper_models[key]

@@ -175,10 +175,11 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     output_path = speak(
         translated_summary,
         language=language or lang.upper(),
-        speaker_key=model_path,  # pass actual model path
+        speaker_key=model_path,  # now passes full path
         speed=speed,
         output_mode=output_mode
     )
+
 
     t12 = time.time()
     print(f"✅ Finished speaking.")
@@ -193,7 +194,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the OSM voice assistant.")
     parser.add_argument("--speaker", type=str, default="amy", help="Speaker name (matches speaker folder)")
-    parser.add_argument("--language", type=str, default="EN_NEWEST", help="Language key for TTS (used if not detected)")
+    parser.add_argument("--language", type=str, default="en", help="Language key for TTS (used if not detected)")
     parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
     parser.add_argument("--save-json", action="store_true", help="Save raw Overpass results to JSON")
     parser.add_argument("--text", type=str, help="Provide a question as text input instead of recording")
