@@ -5,9 +5,11 @@ import datetime
 import wave
 import subprocess
 import glob
+import io
 from typing import Optional
-
-from piper.voice import PiperVoice
+from piper.voice import PiperVoice, SynthesisConfig
+from pydub import AudioSegment
+import torch
 
 # ========================
 # Config
@@ -31,58 +33,42 @@ SUPPORTED_SPEAKERS = {
     'uz': 'uz_UZ-dilnavoz-low'
 }
 
-# Cache loaded models
 _piper_models = {}
 
-
+# -------------------------
+# Helpers
+# -------------------------
 def clean_text(text: str, lang: str) -> str:
-    """
-    Normalize text for Piper. Remove accents only for English or non-accent languages.
-    """
+    """Normalize text. Remove accents only for English."""
     text = text.replace("’", "'").replace("‘", "'").replace("`", "'")
-
-    # Remove accents only for English
     if lang.startswith("en"):
         text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-
-    # Remove unsupported characters
-    text = re.sub(r"[^a-zA-Z0-9À-ÖØ-öø-ÿ\s.,!?'\-]", " ", text)
-    return text.strip()
+    return re.sub(r"[^a-zA-Z0-9À-ÖØ-öø-ÿ\s.,!?'\-]", " ", text).strip()
 
 
 def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
-    """
-    Load a Piper TTS model for the given language/speaker. Downloads if missing.
-    """
+    """Load a Piper TTS model (auto-download if missing)."""
     speaker = speaker or SUPPORTED_SPEAKERS.get(language, DEFAULT_SPEAKER)
     key = f"{language}_{speaker}".lower()
     model_path = os.path.join(MODEL_DIR, f"{speaker}.onnx")
     config_path = os.path.join(MODEL_DIR, f"{speaker}.onnx.json")
 
-    # Download model if missing
     if not (os.path.isfile(model_path) and os.path.isfile(config_path)):
         print(f"[piper] ⚠️ Model '{speaker}' not found locally. Attempting download...")
-        subprocess.run(
-            ["python3", "-m", "piper.download_voices", "--data-dir", MODEL_DIR, speaker],
-            check=True
-        )
+        subprocess.run(["python3", "-m", "piper.download_voices", "--data-dir", MODEL_DIR, speaker], check=True)
         downloaded_files = glob.glob(os.path.join(MODEL_DIR, f"{speaker}*"))
         if not downloaded_files:
             raise FileNotFoundError(f"No downloaded files found for '{speaker}' in {MODEL_DIR}'")
         print(f"[piper] ✅ Download complete: {downloaded_files}")
 
-    # Load from cache if available
     if key not in _piper_models:
         print(f"[piper] ⏬ Loading Piper model: {speaker}")
-        _piper_models[key] = PiperVoice.load(model_path)
+        _piper_models[key] = PiperVoice.load(model_path, use_cuda=torch.cuda.is_available())
 
     return _piper_models[key]
 
 
 def chunk_text(text: str, max_len: int = 200) -> list:
-    """
-    Split text into smaller chunks for safer synthesis.
-    """
     chunks = re.split(r'(?<=[.!?])\s+', text)
     result = []
     for chunk in chunks:
@@ -96,18 +82,23 @@ def chunk_text(text: str, max_len: int = 200) -> list:
             result.append(chunk)
     return result
 
-
+# -------------------------
+# Main speak function
+# -------------------------
 def speak(
     text: str,
     language: str = 'en',
     speaker_key: str = None,
+    speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR,
-    return_audio: bool = False
-) -> str:
+    return_stream_mp3: bool = False
+):
     """
-    Convert text to speech using Piper TTS (safe mode).
-    Always produces an audio file, falling back to default text if necessary.
+    Convert text to speech using Piper.
+    - If return_stream_mp3=True → returns MP3 bytes
+    - Otherwise saves to MP3 file and returns file path
     """
+
     print("[piper] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
 
@@ -122,20 +113,36 @@ def speak(
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
 
-    print("[piper] ✅ Starting synthesis")
+    # Convert speed -> length_scale
+    length_scale = max(0.5, min(3.0, 1.0 / speed)) if speed > 0 else 1.0
+    syn_config = SynthesisConfig(
+        volume=1.0,
+        length_scale=length_scale,
+        noise_scale=1.0,
+        noise_w_scale=1.0,
+        normalize_audio=True
+    )
+
+    # Write WAV
     with wave.open(output_path, "wb") as wav_file:
         for chunk in chunks:
             print(f"[piper] ▶ Synthesizing chunk: {chunk}")
-            try:
-                model.synthesize_wav(chunk, wav_file)
-            except Exception as e:
-                print(f"[piper] ⚠️ Failed chunk synthesis: {e}")
+            model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
 
-    # ✅ Fallback if no audio was generated
-    if os.path.getsize(output_path) < 1000:
-        print("[piper] ⚠️ No audio generated, using fallback speech")
-        with wave.open(output_path, "wb") as wav_file:
-            model.synthesize_wav("I found some results nearby.", wav_file)
+    # If requested, return MP3 stream instead of saving
+    if return_stream_mp3:
+        audio_segment = AudioSegment.from_wav(output_path)
+        mp3_buffer = io.BytesIO()
+        audio_segment.export(mp3_buffer, format="mp3")
+        mp3_buffer.seek(0)
+        os.remove(output_path)
+        return mp3_buffer.read()
 
-    print(f"[piper] ✅ Saved TTS to '{output_path}'")
-    return output_path
+    # Otherwise, save MP3 file
+    audio_segment = AudioSegment.from_wav(output_path)
+    mp3_path = output_path.replace(".wav", ".mp3")
+    audio_segment.export(mp3_path, format="mp3")
+    os.remove(output_path)
+
+    print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
+    return mp3_path
