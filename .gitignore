@@ -45,3 +45,8 @@ desktop.ini
 
 node_modules/
 venv/
+
+backend/db.sqlite3
+
+__pycache__
+

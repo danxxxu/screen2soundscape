@@ -4,7 +4,7 @@ import os
 import json
 import requests
 from requests.exceptions import HTTPError
-from utils.llama_singleton import get_llm
+from backend.utils.llama_singleton import get_llm
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 # _llm = get_llm()
