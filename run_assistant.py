@@ -177,7 +177,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
         language=language or lang.upper(),
         speaker_key=speaker,
         speed=speed,
-        return_audio=False
+        return_stream_mp3="mp3"
     )
 
     t12 = time.time()
