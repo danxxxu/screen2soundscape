@@ -22,7 +22,6 @@ os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 import logging
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
-
 import requests
 import argparse
 import os

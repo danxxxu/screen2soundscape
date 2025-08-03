@@ -108,6 +108,21 @@ def get_piper_model(language: str = 'en', speaker: Optional[str] = None):
 def clean_sentences(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if s.strip()]
 
+def chunk_text(sent, max_len=100):
+    # Split by comma, semicolon, or 'and'
+    parts = re.split(r'[,;]| and ', sent)
+    chunks = []
+    buf = ""
+    for part in parts:
+        if len(buf) + len(part) <= max_len:
+            buf += part.strip() + " "
+        else:
+            if buf:
+                chunks.append(buf.strip())
+            buf = part.strip() + " "
+    if buf:
+        chunks.append(buf.strip())
+    return chunks
 
 def speak(
     text: str,
@@ -143,24 +158,25 @@ def speak(
     print("[piper] ✅ Starting synthesis")
     for sent in sentences:
         sent = normalize_text(sent)
-        audio_chunks = list(model.synthesize(sent))
-        if not audio_chunks:
-            print(f"[piper] ⚠️ Empty audio returned for sentence: '{sent}', skipping.")
-            continue
+        sub_chunks = chunk_text(sent)
+        for chunk in sub_chunks:
+            print(f"[piper] ▶ Synthesizing chunk: {chunk}")
+            audio_chunks = list(model.synthesize(chunk))
+            if not audio_chunks:
+                print(f"[piper] ⚠️ Failed chunk: '{chunk}'")
+                continue
 
-        # ✅ Extract bytes from AudioChunk objects
-        audio_data = b''.join(chunk.data for chunk in audio_chunks if hasattr(chunk, "data"))
-        if not audio_data:
-            print(f"[piper] ⚠️ No audio data in chunks for sentence: '{sent}', skipping.")
-            continue
+            audio_data = b''.join(c.data for c in audio_chunks if hasattr(c, "data"))
+            if not audio_data:
+                print(f"[piper] ⚠️ No audio data for chunk '{chunk}'")
+                continue
 
-        wav = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            wav = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            if wav.size == 0:
+                print(f"[piper] ⚠️ Empty waveform for chunk '{chunk}'")
+                continue
 
-        if wav.size == 0:
-            print(f"[piper] ⚠️ Empty waveform returned for sentence: '{sent}', skipping.")
-            continue
-
-        full_audio = np.concatenate([full_audio, wav, silence_between])
+            full_audio = np.concatenate([full_audio, wav, silence_between])
 
 
     if full_audio.size == 0:
