@@ -1,6 +1,6 @@
 *.wav
 *.gguf
-checkpoints_v2/converter/checkpoint.pth
+backend/checkpoints_v2/converter/checkpoint.pth
 # Godot-specific files
 .import/
 export.cfg
