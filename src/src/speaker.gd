@@ -3,8 +3,8 @@ extends Node
 class_name Speaker
 
 static func speak(text: String, lang: String = "en-US"):
-    if OS.has_feature("web"):
-        JavaScriptBridge.eval("""
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("""
 			(function() {
 				var msg = new SpeechSynthesisUtterance();
 				msg.text = "%s";
@@ -12,21 +12,21 @@ static func speak(text: String, lang: String = "en-US"):
 				window.speechSynthesis.speak(msg);
 			})();
 		""" % [text, lang])
-    else:
-        # todo check the french version on mac
+	else:
+		# todo check the french version on mac
 #        if OS.get_name() == "macOS":
 #            var voice = "Thomas"
 #            var args = ["-v", voice, text]
 #            OS.execute("say", args, [])
 #        else:
 #            DisplayServer.tts_speak(text, lang)
-        DisplayServer.tts_speak(text, lang)
+		DisplayServer.tts_speak(text, lang)
 
 
 static func stop_speaking():
-    if OS.has_feature("web"):
-        JavaScriptBridge.eval("""
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("""
 			window.speechSynthesis.cancel();
 		""")
-    else:
-        DisplayServer.tts_stop()
+	else:
+		DisplayServer.tts_stop()
