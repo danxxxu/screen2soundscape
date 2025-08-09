@@ -5,6 +5,7 @@ var current_command: String = ""
 var command_label: Label
 var current_place: Node3D = null 
 var player: Node3D = null
+var websocket_audio_player: Node
 
 func _ready():
 	command_label = Label.new()
@@ -13,6 +14,14 @@ func _ready():
 	$HUD.add_child(command_label)
 	update_command_label()
 	player = get_node("Player")
+	
+	# Initialize WebSocket audio player as a proper node
+	websocket_audio_player = Node.new()
+	websocket_audio_player.set_script(preload("res://src/websocket_audio_player.gd"))
+	add_child(websocket_audio_player)
+	
+	# Start WebSocket connection
+	websocket_audio_player.connect_to_server()
 
 
 func update_command_label():
@@ -41,7 +50,12 @@ func execute_command(cmd: String):
 				else:
 					current_place.speak("No address available")
 		_:
-			print("Unknown command: ", cmd)
+			# Send unknown commands to WebSocket
+			print("Sending command to WebSocket: ", cmd)
+			if websocket_audio_player and websocket_audio_player.has_method("send_command"):
+				websocket_audio_player.send_command(cmd)
+			else:
+				print("WebSocket audio player not available or send_command method not found")
 
 func _input(event):
 	if event is InputEventKey:

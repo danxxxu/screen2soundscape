@@ -87,7 +87,7 @@ def detect_and_translate(q):
     return q
 
 def extract_locations_llama(text):
-    from utils.llama_singleton import get_llm as load_llm
+    from backend.utils.llama_singleton import get_llm as load_llm
     llm = load_llm()
     prompt = (
         "Extract the names of specific places or locations mentioned in the sentence.\n\n"
