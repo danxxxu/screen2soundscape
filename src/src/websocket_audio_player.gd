@@ -46,6 +46,15 @@ func connect_to_server():
 	
 	print("Connection request sent to WebSocket server")
 
+func send_command(command_text: String):
+	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		var message = {"message": command_text}
+		var json_string = JSON.stringify(message)
+		websocket.send_text(json_string)
+		print("Sent command to WebSocket: ", json_string)
+	else:
+		print("WebSocket not connected, cannot send command: ", command_text)
+
 func _process(delta):
 	websocket.poll()
 	
@@ -56,12 +65,6 @@ func _process(delta):
 			print("WebSocket connection established")
 			connection_established.emit()
 			
-			# Send initial message to start streaming
-			var message = {"message": "Hello, stream me some audio!"}
-			var json_string = JSON.stringify(message)
-			websocket.send_text(json_string)
-			print("Sent message: ", json_string)
-		
 		# Poll for messages
 		var code = websocket.get_ready_state()
 		
