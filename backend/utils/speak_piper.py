@@ -1,3 +1,4 @@
+# speak_piper.py
 import os
 import re
 import unicodedata
@@ -16,7 +17,8 @@ import torch
 # ========================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "osm_assistant_speaker_audio")
-MODEL_DIR = os.path.join(BASE_DIR, "piper_models")
+# MODEL_DIR = os.path.join(BASE_DIR, "piper_models")
+MODEL_DIR = "backend/piper_models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 DEFAULT_LANGUAGE = 'en'
@@ -166,19 +168,20 @@ def speak(
         audio_segment = AudioSegment.from_file(wav_buffer, format="wav")
         mp3_buffer = io.BytesIO()
         audio_segment.export(mp3_buffer, format="mp3")
+        print("[piper] ✅ Streaming now: ")
         return mp3_buffer.getvalue()
 
-    # File mode
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
-    with wave.open(wav_path, "wb") as wav_file:
-        for chunk in chunks:
-            model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
+    elif output_mode == "file":
+        # File mode
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
+        with wave.open(wav_path, "wb") as wav_file:
+            for chunk in chunks:
+                model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
 
-    mp3_path = wav_path.replace(".wav", ".mp3")
-    AudioSegment.from_wav(wav_path).export(mp3_path, format="mp3")
-    os.remove(wav_path)
+        mp3_path = wav_path.replace(".wav", ".mp3")
+        AudioSegment.from_wav(wav_path).export(mp3_path, format="mp3")
+        os.remove(wav_path)
 
-    print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
-    return mp3_path
-
+        print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
+        return mp3_path

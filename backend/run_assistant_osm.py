@@ -1,7 +1,15 @@
 # run_assistant.py
 import os
-os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"  # Must be first, before importing torch
 
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"  # Must be first, before importing torch
+# Suppress TensorFlow logs
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"      # 0=all logs, 1=filter INFO, 2=filter WARNING, 3=only errors
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"     # Disable oneDNN messages
+
+# Optional: Suppress absl and other noisy logs
+os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
+
+import time
 import warnings
 import transformers
 warnings.filterwarnings("ignore")
@@ -11,43 +19,35 @@ import torch
 torch._C._jit_set_profiling_mode(False)
 torch._C._jit_set_profiling_executor(False)
 
-import os
-# Suppress TensorFlow logs
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"      # 0=all logs, 1=filter INFO, 2=filter WARNING, 3=only errors
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"     # Disable oneDNN messages
-
-# Optional: Suppress absl and other noisy logs
-os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
-
 import logging
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 import requests
 import argparse
-import os
 import json
 from langdetect import detect
 from deep_translator import GoogleTranslator
-from utils.transcribe import record_and_transcribe
-# from utils.speak_silero import speak
-from utils.speak_piper import speak, find_best_piper_model
-from utils.question_to_overpass import (
+from backend.utils.transcribe import record_and_transcribe
+from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
+from backend.utils.question_to_overpass import (
     parse_question,
     build_overpass_query)
+
+from backend.utils.overpass_to_osm_flan import (
+    run_overpass_query,
+    summarize_results,
+    summarize_route,
+    warmup_summariser
+)
+
 # from utils.overpass_to_osm_llama import (
 #     run_overpass_query,
 #     summarize_results,
 #     summarize_route
 # )
-from utils.overpass_to_osm_flan import warmup_summariser
-warmup_summariser() 
 
-from utils.overpass_to_osm_flan import (
-    run_overpass_query,
-    summarize_results,
-    summarize_route
-)
-import time
+
+warmup_summariser() 
 
 def detect_language(text):
     try:
@@ -171,8 +171,8 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     print("🕒 Step 6: Speaking response with TTS...")
     t11 = time.time()
 
-    model_path = find_best_piper_model("piper_models", language, speaker)
-    output_path = speak(
+    model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+    output = speak(
         translated_summary,
         language=language or lang.upper(),
         speaker_key=model_path,  # now passes full path
@@ -183,7 +183,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
 
     t12 = time.time()
     print(f"✅ Finished speaking.")
-    print(f"🔉 Output file: {output_path}")
+    print(f"🔉 Output audio: {output}")
     print(f"⏱️ Step 6 duration: {t12 - t11:.2f} seconds\n")
 
     total_time = t12 - t1
@@ -218,13 +218,7 @@ if __name__ == "__main__":
 
 
 # # Example usage:
-# python run_assistant.py --speaker arnold --language EN_NEWEST --speed 1.0
-# python run_assistant.py --speaker arnold --text "Where are the closest ATMs near King's Cross station?"
-# python run_assistant.py --speaker arnold --text "Are there any pet-friendly hotels in Zurich?"
-# python run_assistant.py --speaker arnold --text "Y a-t-il des restaurants végétaliens à Lyon ?"
-# python run_assistant.py --speaker arnold --text "Où se trouve le marché aux puces à Paris ?"
-# python run_assistant.py --speaker arnold --text "Are there any coffee shops nearby?" --lat 50.6683 --lon 4.6156
+# python -m backend.run_assistant_osm --speaker amy --text "Are there any coffee shops nearby?" --lat 50.6683 --lon 4.6156 --language en # python -m backend.run_assistant --speaker amy --text "Are there any coffee shops nearby?" --lat 50.6683 --lon 4.6156 --language en 
+# python -m backend.run_assistant_osm --speaker amy --text "Are there any coffee shops nearby?" --lat 50.6683 --lon 4.6156 --language en # python -m backend.run_assistant --speaker amy --text "Are there any coffee shops nearby?" --lat 50.6683 --lon 4.6156 --language en --output-mode stream
 
-# python run_assistant.py --speaker arnold --text "Where can I get my nails at a beauty salon done in louvain la neuve?"
-# python run_assistant.py --speaker arnold --text "How can I get from 302 hutchinson blvd, mount vernon, to times square?"
-# %%
+

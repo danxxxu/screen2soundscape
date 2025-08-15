@@ -1,9 +1,9 @@
 [gd_scene load_steps=7 format=3 uid="uid://banloe8guvh8w"]
 
-[ext_resource type="Script" path="res://src/player.gd" id="1_q2squ"]
-[ext_resource type="AudioStream" uid="uid://cmhmu1odscv8w" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
-[ext_resource type="AudioStream" uid="uid://58rtud1o8tf0" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
-[ext_resource type="AudioStream" uid="uid://dxavm2acp1sus" path="res://assets/audio/sliding.mp3" id="5_wall"]
+[ext_resource type="Script" uid="uid://c1imbpnx66fln" path="res://src/player.gd" id="1_q2squ"]
+[ext_resource type="AudioStream" uid="uid://dxjh0kiolcl0b" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
+[ext_resource type="AudioStream" uid="uid://dd5ens6ty251a" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
+[ext_resource type="AudioStream" uid="uid://yssxaslcwm1v" path="res://assets/audio/sliding.mp3" id="5_wall"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 

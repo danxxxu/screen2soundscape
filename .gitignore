@@ -50,3 +50,5 @@ backend/db.sqlite3
 
 __pycache__
 
+backend/piper_models/
+backend/piper_models/
