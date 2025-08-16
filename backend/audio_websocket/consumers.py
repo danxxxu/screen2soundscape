@@ -51,7 +51,7 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
                 "message": f"Error: {str(e)}"
             }))
 
-    # ---------- NEW: run assistant and stream its output ----------
+    # ---------- run assistant and stream its output ----------
 
     async def run_assistant_osm_and_stream_output(self, user_message: str):
         """
@@ -124,6 +124,117 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
             # Comment this out if you don't want a fallback
             # await self.stream_file(os.path.join(settings.BASE_DIR, 'sample_audio', 'arnold_original.mp3'))
             pass
+        
+    async def run_assistant_general_and_stream_output(self, user_message: str, output_mode: str = "file"):
+        """
+        Spawns `python -m backend.run_assistant_general ...` and streams stdout/stderr lines
+        back over the websocket. If it prints an audio file path, we stream that file too.
+
+        Notes:
+        - output_mode="file" is recommended so Piper saves an MP3 path we can stream.
+        - If you do use output_mode="stream", make sure your runner does NOT print raw bytes.
+        """
+
+        # Build the command using this Python interpreter
+        cmd = [
+            sys.executable, "-m", "backend.run_assistant_general",
+            "--speaker", self.DEFAULT_SPEAKER,
+            "--text", user_message,
+            "--language", self.DEFAULT_LANG,
+            "--output-mode", output_mode,  # "file" or "stream" (prefer "file" here)
+        ]
+        # Optional: speed
+        if hasattr(self, "DEFAULT_SPEED") and self.DEFAULT_SPEED:
+            cmd += ["--speed", str(self.DEFAULT_SPEED)]
+
+        # Notify client we started
+        await self.send(text_data=json.dumps({
+            "type": "assistant_start",
+            "message": "Starting assistant (general)"
+        }))
+
+        # Start subprocess (non-blocking)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        audio_path_found = None
+
+        # Small helper: capture only the clean model text lines
+        # We detect either:
+        #   " LLaMA response:" OR "" Extracted response text:"
+        # and then forward subsequent non-empty lines until the next "Step" header.
+        async def _read_stream(stream, stream_type: str):
+            nonlocal audio_path_found
+            collecting_text = False
+
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+
+                decoded = line.decode(errors="ignore").rstrip()
+
+                # Detect audio path from the runner's log (re-uses your existing helper)
+                maybe_path = self.parse_audio_path_from_line(decoded)
+                if maybe_path and not audio_path_found:
+                    audio_path_found = maybe_path
+
+                # Toggle text collection state
+                if decoded.strip().startswith(" LLaMA response:") or \
+                decoded.strip().startswith(" Extracted response text:"):
+                    collecting_text = True
+                    # Don't forward this label line as text; just continue
+                    await self.send(text_data=json.dumps({
+                        "type": "assistant_log",
+                        "stream": stream_type,
+                        "message": decoded
+                    }))
+                    continue
+
+                # If we see a new step header, stop collecting text
+                if decoded.strip().startswith("🕒 Step "):
+                    collecting_text = False
+
+                # While collecting, forward the clean text separately
+                if collecting_text and decoded:
+                    await self.send(text_data=json.dumps({
+                        "type": "assistant_text",   # <- clean text event
+                        "message": decoded
+                    }))
+                    # Also forward as log if you still want the raw line visible
+                    await self.send(text_data=json.dumps({
+                        "type": "assistant_log",
+                        "stream": stream_type,
+                        "message": decoded
+                    }))
+                    continue
+
+                # Default: forward incremental logs to the client
+                await self.send(text_data=json.dumps({
+                    "type": "assistant_log",
+                    "stream": stream_type,
+                    "message": decoded
+                }))
+
+        # Read both stdout and stderr concurrently
+        stdout_task = asyncio.create_task(_read_stream(proc.stdout, "stdout"))
+        stderr_task = asyncio.create_task(_read_stream(proc.stderr, "stderr"))
+
+        # Wait for process to finish
+        await asyncio.gather(stdout_task, stderr_task)
+        return_code = await proc.wait()
+
+        await self.send(text_data=json.dumps({
+            "type": "assistant_done",
+            "return_code": return_code
+        }))
+
+        # If an audio file was announced, stream it
+        if audio_path_found and output_mode == "file":
+            await self.stream_file(audio_path_found)
 
     @staticmethod
     def parse_audio_path_from_line(line: str) -> str | None:
