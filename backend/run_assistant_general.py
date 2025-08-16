@@ -155,3 +155,6 @@ if __name__ == "__main__":
         text_file=args.text_file,
         output_mode=args.output_mode
     )
+
+# Example
+# python -m backend.run_assistant_general --speaker amy --text "Where are the top 10 tallest mountains" --output-mode file

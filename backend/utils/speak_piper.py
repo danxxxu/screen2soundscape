@@ -147,7 +147,7 @@ def speak(
     model = get_piper_model(language=lang_code, speaker=speaker)
 
     text = clean_text(text, lang_code)
-    chunks = chunk_text(text)
+    chunks = [c for c in chunk_text(text) if c.strip()]
 
     length_scale = max(0.5, min(3.0, 1.0 / speed)) if speed > 0 else 1.0
     syn_config = SynthesisConfig(
@@ -158,30 +158,75 @@ def speak(
         normalize_audio=True
     )
 
-    # Use in-memory buffer for stream mode
+    # Helper: synthesize a single chunk into a BytesIO WAV and return (params, frames)
+    def synth_chunk_to_bytes(chunk: str):
+        tmp_buf = io.BytesIO()
+        with wave.open(tmp_buf, "wb") as tmp_wav:
+            model.synthesize_wav(chunk, tmp_wav, syn_config=syn_config)
+        tmp_buf.seek(0)
+        with wave.open(tmp_buf, "rb") as in_wav:
+            params = (in_wav.getnchannels(), in_wav.getsampwidth(), in_wav.getframerate())
+            frames = in_wav.readframes(in_wav.getnframes())
+        return params, frames
+
+    # STREAM MODE: build a single WAV in-memory by concatenating chunk WAVs, then return MP3 bytes
     if output_mode == "stream":
-        wav_buffer = io.BytesIO()
-        with wave.open(wav_buffer, "wb") as wav_file:
-            for chunk in chunks:
-                model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
-        wav_buffer.seek(0)
-        audio_segment = AudioSegment.from_file(wav_buffer, format="wav")
+        final_wav = io.BytesIO()
+        with wave.open(final_wav, "wb") as out_wav:
+            first = True
+            ref_params = None
+
+            for idx, chunk in enumerate(chunks):
+                params, frames = synth_chunk_to_bytes(chunk)
+
+                if first:
+                    nch, sampwidth, framerate = params
+                    out_wav.setnchannels(nch)
+                    out_wav.setsampwidth(sampwidth)
+                    out_wav.setframerate(framerate)
+                    ref_params = params
+                    first = False
+                else:
+                    # verify params are consistent
+                    if params != ref_params:
+                        raise RuntimeError(
+                            f"Inconsistent audio params in chunk {idx}: got {params}, expected {ref_params}"
+                        )
+                out_wav.writeframes(frames)
+
+        final_wav.seek(0)
         mp3_buffer = io.BytesIO()
-        audio_segment.export(mp3_buffer, format="mp3")
-        print("[piper] ✅ Streaming now: ")
+        AudioSegment.from_file(final_wav, format="wav").export(mp3_buffer, format="mp3")
+        print("[piper] ✅ Streaming now")
         return mp3_buffer.getvalue()
 
-    elif output_mode == "file":
-        # File mode
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
-        with wave.open(wav_path, "wb") as wav_file:
-            for chunk in chunks:
-                model.synthesize_wav(chunk, wav_file, syn_config=syn_config)
+    # FILE MODE: same concatenation approach, but write to disk and return MP3 path
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
+    with wave.open(wav_path, "wb") as out_wav:
+        first = True
+        ref_params = None
 
-        mp3_path = wav_path.replace(".wav", ".mp3")
-        AudioSegment.from_wav(wav_path).export(mp3_path, format="mp3")
-        os.remove(wav_path)
+        for idx, chunk in enumerate(chunks):
+            params, frames = synth_chunk_to_bytes(chunk)
 
-        print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
-        return mp3_path
+            if first:
+                nch, sampwidth, framerate = params
+                out_wav.setnchannels(nch)
+                out_wav.setsampwidth(sampwidth)
+                out_wav.setframerate(framerate)
+                ref_params = params
+                first = False
+            else:
+                if params != ref_params:
+                    raise RuntimeError(
+                        f"Inconsistent audio params in chunk {idx}: got {params}, expected {ref_params}"
+                    )
+            out_wav.writeframes(frames)
+
+    mp3_path = wav_path.replace(".wav", ".mp3")
+    AudioSegment.from_wav(wav_path).export(mp3_path, format="mp3")
+    os.remove(wav_path)
+
+    print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
+    return mp3_path
