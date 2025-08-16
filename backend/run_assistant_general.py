@@ -1,99 +1,157 @@
+# backend/run_assistant_general.py
+import os
+
+# Suppress noisy logs before imports
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
+
 import warnings
 import transformers
 warnings.filterwarnings("ignore")
 transformers.logging.set_verbosity_error()
 
 import torch
-# Disable JIT profiling for performance consistency
 torch._C._jit_set_profiling_mode(False)
 torch._C._jit_set_profiling_executor(False)
 
-import requests
-import os
-import json
+import logging
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
+
+import argparse
 import time
-from langdetect import detect
-from deep_translator import GoogleTranslator
-from utils.transcribe import record_and_transcribe
-from utils.speak_silero import speak
-from utils.question_to_overpass import parse_question, build_overpass_query
-from utils.overpass_to_osm_llama import run_overpass_query, summarize_results, summarize_route
+import json
+
+from backend.utils.llama_singleton import get_llm
+from backend.utils.transcribe import record_and_transcribe
+from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 
 
-def detect_language(text: str) -> str:
-    """Detect language code for a given text."""
-    try:
-        return detect(text)
-    except Exception:
-        return "unknown"
-
-
-def get_directions(start: tuple, end: tuple, mode: str = "walk") -> dict:
-    """Query OSRM for turn-by-turn directions."""
-    profile = {"walk": "foot", "drive": "car", "bike": "bike"}.get(mode.lower(), "foot")
-    url = f"https://router.project-osrm.org/route/v1/{profile}/{start[1]},{start[0]};{end[1]},{end[0]}"
-    params = {"overview": "simplified", "geometries": "geojson", "steps": "true"}
-    resp = requests.get(url, params=params)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def handle_question(
-    question: str,
-    speaker: str = "arnold",
-    language: str = None,
-    speed: float = 1.0,
-    save_json: bool = False
-) -> str:
-    """
-    Process a user question to fetch OSM data or routing info,
-    summarize with an LLM, optionally translate and speak.
-
-    :param question: User's question in text form
-    :param speaker: TTS speaker key (e.g. "arnold")
-    :param language: TTS language override (e.g. "EN_NEWEST")
-    :param speed: TTS speed multiplier
-    :param save_json: If True, save raw Overpass results to ./osm_assistant_output/raw.json
-    :return: Final (possibly translated) summary string
-    """
-    # 1. Detect language
-    lang = detect_language(question)
-
-    # 2. Parse question into OSM parameters
-    params = parse_question(question)
-
-    # 3. Determine mode: routing vs. POI lookup
-    if params.get("mode") in ("route_check", "route_via"):
-        # Routing mode
-        directions = get_directions(params["start_coords"], params["end_coords"])
-        summary = summarize_route(directions)
+def get_question(text=None, text_file=None):
+    if text:
+        return text.strip()
+    elif text_file and os.path.isfile(text_file):
+        with open(text_file, "r", encoding="utf-8") as f:
+            return f.read().strip()
     else:
-        # POI or boundary lookup
-        if not params.get("center") and not params.get("bbox") and params.get("mode") != "boundary_lookup":
-            raise ValueError("Could not resolve a location from the question.")
-        query = build_overpass_query(params)
-        results = run_overpass_query(query)
-        if save_json:
-            os.makedirs("osm_assistant_output", exist_ok=True)
-            with open("osm_assistant_output/raw.json", "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
-        summary = summarize_results(question, results)
+        return record_and_transcribe()
 
-    # 4. Translate if needed
-    lang_code = lang.lower()
-    translated = summary
-    if lang_code not in ("en", "en_us", "en_newest"):
-        try:
-            translated = GoogleTranslator(source="en", target=lang_code).translate(summary)
-        except Exception:
-            translated = summary
 
-    # 5. Speak via TTS
-    speak(
-        translated,
-        language=language or lang.upper(),
-        speaker_key=speaker,
-        speed=speed
+def _extract_text_from_llm_response(resp):
+    """
+    Try to extract a plain string from a variety of LLM response formats:
+    - OpenAI-like dict: {'choices': [{'text': '...'}]} or {'choices': [{'message': {'content': '...'}}]}
+    - Plain string
+    - List of strings (join)
+    - Objects with .choices and .text/.message.content (best-effort)
+    """
+    # 1) If it's already a string, return it
+    if isinstance(resp, str):
+        return resp.strip()
+
+    # 2) OpenAI-like dict
+    if isinstance(resp, dict):
+        choices = resp.get("choices")
+        if isinstance(choices, list) and choices:
+            choice0 = choices[0]
+            # a) text completion style
+            if isinstance(choice0, dict):
+                if "text" in choice0 and isinstance(choice0["text"], str):
+                    return choice0["text"].strip()
+                # b) chat style
+                message = choice0.get("message")
+                if isinstance(message, dict):
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        return content.strip()
+        # fallback to something sensible
+        # try 'text' at top-level
+        if isinstance(resp.get("text"), str):
+            return resp["text"].strip()
+
+    # 3) List of strings -> join
+    if isinstance(resp, list) and all(isinstance(x, str) for x in resp):
+        return "\n".join(resp).strip()
+
+    # 4) Last resort: stringify
+    return str(resp)
+
+
+def main(speaker, language, speed, text, text_file, output_mode="file"):
+    if not speaker:
+        print("❌ You must specify a --speaker.")
+        return
+
+    # Step 1: Get question
+    print("🕒 Step 1: Getting question...")
+    t1 = time.time()
+    question = get_question(text=text, text_file=text_file)
+    t2 = time.time()
+    print(f"✅ Got question: {question}")
+    print(f"⏱️ Step 1 duration: {t2 - t1:.2f} seconds\n")
+
+    # Step 2: Ask LLaMA
+    print("🕒 Step 2: Asking LLaMA...")
+    t3 = time.time()
+    llm = get_llm()
+    try:
+        raw_response = llm(question)
+    except Exception as e:
+        print(f"❌ LLaMA inference failed: {e}")
+        return
+    t4 = time.time()
+
+    # Pretty print raw response
+    try:
+        print("✅ LLaMA raw response (pretty JSON):")
+        print(json.dumps(raw_response, indent=2, ensure_ascii=False))
+    except Exception:
+        print("✅ LLaMA raw response (stringified):")
+        print(str(raw_response))
+
+    # Extract plain text
+    response_text = _extract_text_from_llm_response(raw_response)
+    print("\n📝 Extracted response text:")
+    print(response_text)
+    print(f"\n⏱️ Step 2 duration: {t4 - t3:.2f} seconds\n")
+
+    # Step 3: Speak response
+    print("🕒 Step 3: Speaking response with TTS...")
+    t5 = time.time()
+    model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+    output = speak(
+        response_text,
+        language=language,
+        speaker_key=model_path,
+        speed=speed,
+        output_mode=output_mode
     )
+    t6 = time.time()
+    print(f"✅ Finished speaking.")
+    print(f"🔉 Output audio: {output}")
+    print(f"⏱️ Step 3 duration: {t6 - t5:.2f} seconds\n")
 
-    return translated
+    total_time = t6 - t1
+    print(f"🎉 Assistant process completed in {total_time:.2f} seconds.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the general-purpose voice assistant.")
+    parser.add_argument("--speaker", type=str, default="amy", help="Speaker name (matches speaker folder)")
+    parser.add_argument("--language", type=str, default="en", help="Language key for TTS")
+    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
+    parser.add_argument("--text", type=str, help="Provide a question as text input instead of recording")
+    parser.add_argument("--text-file", type=str, help="Provide a question via a text file instead of recording")
+    parser.add_argument("--output-mode", type=str, choices=["file", "stream"], default="file",
+                        help="Output mode for TTS: 'file' or 'stream' (default: file)")
+    args = parser.parse_args()
+
+    main(
+        speaker=args.speaker,
+        language=args.language,
+        speed=args.speed,
+        text=args.text,
+        text_file=args.text_file,
+        output_mode=args.output_mode
+    )

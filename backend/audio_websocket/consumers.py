@@ -53,14 +53,14 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
 
     # ---------- NEW: run assistant and stream its output ----------
 
-    async def run_assistant_and_stream_output(self, user_message: str):
+    async def run_assistant_osm_and_stream_output(self, user_message: str):
         """
         Spawns `python -m backend.run_assistant ...` and streams stdout/stderr lines
         back over the websocket. If it prints an AUDIO_FILE=... line, we stream that file too.
         """
         # Build the command using this Python interpreter
         cmd = [
-            sys.executable, "-m", "backend.run_assistant",
+            sys.executable, "-m", "backend.run_assistant_osm",
             "--speaker", self.DEFAULT_SPEAKER,
             "--text", user_message,
             "--lat", self.DEFAULT_LAT,
