@@ -102,19 +102,12 @@ def main(speaker, language, speed, text, text_file, output_mode="file"):
         return
     t4 = time.time()
 
-    # Pretty print raw response
-    try:
-        print("✅ LLaMA raw response (pretty JSON):")
-        print(json.dumps(raw_response, indent=2, ensure_ascii=False))
-    except Exception:
-        print("✅ LLaMA raw response (stringified):")
-        print(str(raw_response))
-
-    # Extract plain text
+    # ✅ Only print extracted response text
     response_text = _extract_text_from_llm_response(raw_response)
-    print("\n📝 Extracted response text:")
+    print("✅ LLaMA response:")
     print(response_text)
     print(f"\n⏱️ Step 2 duration: {t4 - t3:.2f} seconds\n")
+
 
     # Step 3: Speak response
     print("🕒 Step 3: Speaking response with TTS...")
