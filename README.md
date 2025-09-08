@@ -1,4 +1,3 @@
-````markdown
 # ScreenToSoundscapes – OSM & General Voice Assistant
 
 Ask spoken or typed questions about places. For map-y queries, it parses your question into **Overpass QL**, optionally gets **OSRM** directions, summarizes with an **LLM**, and replies using **Piper TTS**. For general questions, it uses your local **LLaMA** and also speaks the answer.
@@ -19,8 +18,44 @@ Ask spoken or typed questions about places. For map-y queries, it parses your qu
 
 ## 🗂️ Scripts
 
-- `backend/run_assistant_osm.py` – place & routing questions (OSM/Overpass/OSRM + FLAN + Piper)
-- `backend/run_assistant_general.py` – general questions (LLaMA + Piper)
+### `backend/run_assistant_osm.py` — OpenStreetMap & directions
+Use this for **map-centric questions** that involve places, proximity, or routes.
+
+**Best for**
+- “How do I get from **Point A to Point B** (walk/bike/car)?”
+- “**Where are the closest cafés** to here?”
+- “Find **pharmacies near me**.”
+- “Show **wheelchair-accessible toilets** near 48.8566, 2.3522.”
+
+**What it does**
+1) Parses your natural-language question into an **Overpass QL** query  
+2) Calls **Overpass API** (POIs, amenities, features)  
+3) If it’s a routing question, calls **OSRM** for step-by-step directions  
+4) Summarizes results with a **FLAN** model  
+5) Speaks the answer with **Piper TTS**
+
+**Tips**
+- Modes like `walk/bike/car` are supported in routing.
+- Use `--save-json` to dump raw Overpass results.
+
+---
+
+### `backend/run_assistant_general.py` — General (non-map) inquiries
+Use this for **general knowledge or descriptive questions** that aren’t about routing or nearby places.
+
+**Best for**
+- “**Tell me about Mount Everest**.”
+- “What’s the **history of the Eiffel Tower**?”
+- “What are the **top 10 tallest mountains**?”
+
+**What it does**
+1) Takes your question (voice or text)  
+2) Generates an answer with your local **LLaMA** model  
+3) Speaks the answer with **Piper TTS**
+
+**Not for**
+- Live map data, nearby searches, or directions (use `run_assistant_osm.py` instead).
+
 
 ---
 
@@ -188,7 +223,3 @@ backend/
 
 MIT © ScreenToSoundscapes
 
-```
-
-If you want, I can also generate a minimal `requirements.txt` from these sections or add a short “Piper voice download” snippet tailored to your `MODEL_DIR` conventions.
-```
