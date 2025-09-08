@@ -76,7 +76,8 @@ sudo apt-get install -y ffmpeg portaudio19-dev
 ### Python deps
 
 ```bash
-pip install requirements.in
+cd screen2soundscape
+pip install -r requirements.in
 ```
 
 If your parser uses spaCy (recommended):
@@ -200,6 +201,7 @@ Browse them all here:
 ### OSM assistant
 
 ```bash
+cd screen2soundscape
 # Nearby POIs with geo context
 python -m backend.run_assistant_osm \
   --speaker amy \
@@ -228,6 +230,7 @@ python -m backend.run_assistant_osm \
 ### General assistant
 
 ```bash
+cd screen2soundscape
 python -m backend.run_assistant_general \
   --speaker amy \
   --language en \
