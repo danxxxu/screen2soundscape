@@ -76,16 +76,7 @@ sudo apt-get install -y ffmpeg portaudio19-dev
 ### Python deps
 
 ```bash
-pip install \
-  openai-whisper \
-  sounddevice \
-  pydub \
-  scipy \
-  numpy \
-  requests \
-  transformers \
-  langdetect \
-  deep-translator
+pip install requirements.in
 ```
 
 If your parser uses spaCy (recommended):
@@ -97,13 +88,47 @@ python -m spacy download en_core_web_sm
 
 **Piper TTS**
 
-* Install your preferred method (binary or Python wrapper) and download one or more **Piper voice models**.
-* Make sure `backend/utils/speak_piper.py` can find your voices (see its `MODEL_DIR` and your `--speaker`/`--language` usage).
+The assistants (`run_assistant_osm.py` and `run_assistant_general.py`) use **Piper TTS** for speech synthesis.  
+You’ll need to download one or more Piper voices before running the assistant.
+
+### Download all Piper voices
+
+```bash
+pip install -U huggingface_hub
+huggingface-cli download rhasspy/piper-voices \
+  --repo-type model \
+  --include "*.onnx" "*.json" \
+  --local-dir ~/screen2soundscape/backend/piper_models \
+  --local-dir-use-symlinks False
+````
+
+This will download **all available Piper voices** (\~GBs of data) and preserve the folder structure, e.g.:
+
+```
+~/screen2soundscape/backend/piper_models/en/en_GB/alan/low/en_GB-alan-low.onnx
+~/screen2soundscape/backend/piper_models/en/en_US/amy/high/en_US-amy-high.onnx
+```
+
+### Download a single voice
+
+If you don’t want all voices, you can specify a single voice path on Hugging Face, for example:
+
+```bash
+huggingface-cli download rhasspy/piper-voices \
+  --repo-type model \
+  --include "en/en_US/amy/high/*" \
+  --local-dir ~/screen2soundscape/backend/piper_models \
+  --local-dir-use-symlinks False
+```
+
+### Training your own voice
+
+Piper also supports training custom voices.
+See the official guide here:
+👉 [Piper Training Guide](https://github.com/rhasspy/piper/blob/master/TRAINING.md)
 
 
-**LLaMA (for general assistant)** section:
 
-````markdown
 ## 🧠 LLaMA (for the general assistant)
 
 The **general assistant** (`run_assistant_general.py`) relies on a local LLaMA model for question-answering.  
