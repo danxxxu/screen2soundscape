@@ -66,11 +66,11 @@ Use this for **general knowledge or descriptive questions** that aren’t about 
 # 1. Navigate into the project
 cd ~/screen2soundscape
 
-# 2. Create a virtual environment called "stsvenc"
+# 2. Create a virtual environment called "s2svenc"
 python3 -m venv s2svenc
 
 # 3. Activate the virtual environment
-source stsvenc/bin/activate   # (Linux/macOS)
+source s2svenc/bin/activate   # (Linux/macOS)
 # .\s2svenc\Scripts\activate  # (Windows PowerShell)
 
 # 4. Upgrade pip
