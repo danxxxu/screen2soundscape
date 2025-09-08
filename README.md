@@ -76,16 +76,8 @@ sudo apt-get install -y ffmpeg portaudio19-dev
 ### Python deps
 
 ```bash
-pip install \
-  openai-whisper \
-  sounddevice \
-  pydub \
-  scipy \
-  numpy \
-  requests \
-  transformers \
-  langdetect \
-  deep-translator
+cd screen2soundscape
+pip install -r requirements.in
 ```
 
 If your parser uses spaCy (recommended):
@@ -97,12 +89,84 @@ python -m spacy download en_core_web_sm
 
 **Piper TTS**
 
-* Install your preferred method (binary or Python wrapper) and download one or more **Piper voice models**.
-* Make sure `backend/utils/speak_piper.py` can find your voices (see its `MODEL_DIR` and your `--speaker`/`--language` usage).
+The assistants (`run_assistant_osm.py` and `run_assistant_general.py`) use **Piper TTS** for speech synthesis.  
+You’ll need to download one or more Piper voices before running the assistant.
 
-**LLaMA (for general assistant)**
+### Download all Piper voices
 
-* Provide a local model that `backend.utils.llama_singleton.get_llm()` can load (often via `llama-cpp-python` with a GGUF file).
+```bash
+pip install -U huggingface_hub
+huggingface-cli download rhasspy/piper-voices \
+  --repo-type model \
+  --include "*.onnx" "*.json" \
+  --local-dir ~/screen2soundscape/backend/piper_models \
+  --local-dir-use-symlinks False
+````
+
+This will download **all available Piper voices** (\~GBs of data) and preserve the folder structure, e.g.:
+
+```
+~/screen2soundscape/backend/piper_models/en/en_GB/alan/low/en_GB-alan-low.onnx
+~/screen2soundscape/backend/piper_models/en/en_US/amy/high/en_US-amy-high.onnx
+```
+
+### Download a single voice
+
+If you don’t want all voices, you can specify a single voice path on Hugging Face, for example:
+
+```bash
+huggingface-cli download rhasspy/piper-voices \
+  --repo-type model \
+  --include "en/en_US/amy/high/*" \
+  --local-dir ~/screen2soundscape/backend/piper_models \
+  --local-dir-use-symlinks False
+```
+
+### Training your own voice
+
+Piper also supports training custom voices.
+See the official guide here:
+👉 [Piper Training Guide](https://github.com/rhasspy/piper/blob/master/TRAINING.md)
+
+
+
+## 🧠 LLaMA (for the general assistant)
+
+The **general assistant** (`run_assistant_general.py`) relies on a local LLaMA model for question-answering.  
+For this demo we use the quantized **Llama-2-7B-Chat Q4_K_M** model, which balances speed and accuracy.
+
+### Download the model
+
+```bash
+# Create a models directory (if not already present)
+mkdir -p ~/screen2soundscape/backend/models
+
+# Download the 7B chat model in Q4_K_M format (~4 GB)
+wget -O ~/screen2soundscape/backend/models/llama-2-7b-chat.Q4_K_M.gguf \
+  https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf
+````
+
+This will place the model file in:
+
+```
+~/screen2soundscape/backend/models/llama-2-7b-chat.Q4_K_M.gguf
+```
+
+### Other LLaMA variants
+
+* More quantizations (Q2, Q4, Q5, Q8, etc.) are available from the same Hugging Face repo.
+  Higher quantization (`Q8`) = better accuracy, but uses more RAM.
+  Lower quantization (`Q2`) = faster and smaller, but less accurate.
+
+Browse them all here:
+👉 [TheBloke/Llama-2-7B-Chat-GGUF on Hugging Face](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF)
+
+### Tips
+
+* Make sure the filename in your `get_llm()` config points to the correct `.gguf` file.
+* If your machine has limited RAM/VRAM (e.g. 8 GB or less), stick with **Q4\_K\_M** or lighter.
+* For larger context windows or higher accuracy, you can try **13B** or **70B** versions (but they require much more memory).
+
 
 **FLAN (for OSM summaries)**
 
@@ -137,6 +201,7 @@ python -m spacy download en_core_web_sm
 ### OSM assistant
 
 ```bash
+cd screen2soundscape
 # Nearby POIs with geo context
 python -m backend.run_assistant_osm \
   --speaker amy \
@@ -165,6 +230,7 @@ python -m backend.run_assistant_osm \
 ### General assistant
 
 ```bash
+cd screen2soundscape
 python -m backend.run_assistant_general \
   --speaker amy \
   --language en \
