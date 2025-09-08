@@ -2,7 +2,6 @@
 
 Ask spoken or typed questions about places. For map-y queries, it parses your question into **Overpass QL**, optionally gets **OSRM** directions, summarizes with an **LLM**, and replies using **Piper TTS**. For general questions, it uses your local **LLaMA** and also speaks the answer.
 
----
 
 ## ✨ What it does
 
@@ -14,7 +13,7 @@ Ask spoken or typed questions about places. For map-y queries, it parses your qu
 
 > **Note:** These scripts use **Piper TTS**, not OpenVoice/MELo. Voice “speaker” picks a Piper voice model you’ve installed.
 
----
+
 
 ## 🗂️ Scripts
 
@@ -38,7 +37,7 @@ Use this for **map-centric questions** that involve places, proximity, or routes
 - Modes like `walk/bike/car` are supported in routing.
 - Use `--save-json` to dump raw Overpass results.
 
----
+
 
 ### `backend/run_assistant_general.py` — General (non-map) inquiries
 Use this for **general knowledge or descriptive questions** that aren’t about routing or nearby places.
@@ -57,7 +56,7 @@ Use this for **general knowledge or descriptive questions** that aren’t about 
 - Live map data, nearby searches, or directions (use `run_assistant_osm.py` instead).
 
 
----
+
 
 ## 🔧 Installation
 
@@ -109,7 +108,7 @@ python -m spacy download en_core_web_sm
 
 * `backend.utils.overpass_to_osm_flan` should pull a FLAN-T5 model via `transformers` (e.g., `google/flan-t5-base/large`). No extra step if it auto-downloads.
 
----
+
 
 ## 🧠 How it works
 
@@ -131,7 +130,7 @@ python -m spacy download en_core_web_sm
 2. **Ask LLaMA**: `get_llm()` returns your configured local LLaMA
 3. **Speak**: **Piper** TTS
 
----
+
 
 ## 🚀 Usage
 
@@ -192,7 +191,7 @@ backend/
     └── llama_singleton.py           # get_llm() → local LLaMA
 ```
 
----
+
 
 ## 🌍 Multilingual behavior
 
@@ -200,7 +199,7 @@ backend/
 * OSM summaries are produced in **English** by FLAN, then **translated** back to the detected language if needed.
 * TTS language must match an installed **Piper voice**; control via `--language`.
 
----
+
 
 ## ⚠️ Notes & limits
 
@@ -208,7 +207,7 @@ backend/
 * OSM summaries use FLAN; general Q\&A uses your configured LLaMA.
 * Piper speakers are voice models you install; there’s no OpenVoice/MELo in these scripts.
 
----
+
 
 ## 🔜 Roadmap
 
@@ -217,7 +216,7 @@ backend/
 * Richer landmark-based routing cues + via-points
 * Map preview export
 
----
+
 
 ## 🗑 License
 
