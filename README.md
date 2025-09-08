@@ -60,31 +60,28 @@ Use this for **general knowledge or descriptive questions** that aren’t about 
 
 ## 🔧 Installation
 
-### System deps
-- `ffmpeg` (pydub)
-- `portaudio` (sounddevice)
-
-```bash
-# macOS
-brew install ffmpeg portaudio
-
-# Ubuntu
-sudo apt-get update
-sudo apt-get install -y ffmpeg portaudio19-dev
-````
-
 ### Python deps
 
 ```bash
-cd screen2soundscape
-pip install -r requirements.in
-```
+# 1. Navigate into the project
+cd ~/screen2soundscape
 
-If your parser uses spaCy (recommended):
+# 2. Create a virtual environment called "s2svenc"
+python3 -m venv s2svenc
+
+# 3. Activate the virtual environment
+source s2svenc/bin/activate   # (Linux/macOS)
+# .\s2svenc\Scripts\activate  # (Windows PowerShell)
+
+# 4. Upgrade pip
+pip install --upgrade pip
+
+# 5. Install dependencies from requirements.in
+pip install -r requirements.in
+python -m spacy download en_core_web_sm
 
 ```bash
-pip install spacy
-python -m spacy download en_core_web_sm
+
 ```
 
 **Piper TTS**
@@ -95,7 +92,6 @@ You’ll need to download one or more Piper voices before running the assistant.
 ### Download all Piper voices
 
 ```bash
-pip install -U huggingface_hub
 huggingface-cli download rhasspy/piper-voices \
   --repo-type model \
   --include "*.onnx" "*.json" \
