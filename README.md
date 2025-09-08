@@ -1,240 +1,224 @@
-Here’s an updated version of your README to reflect the actual logic and structure of `run_assistant.py`, including accurate step breakdowns, parameter explanations, and small clarifications in capabilities:
+# ScreenToSoundscapes – OSM & General Voice Assistant
 
----
+Ask spoken or typed questions about places. For map-y queries, it parses your question into **Overpass QL**, optionally gets **OSRM** directions, summarizes with an **LLM**, and replies using **Piper TTS**. For general questions, it uses your local **LLaMA** and also speaks the answer.
 
-# ScreenToSoundscapes OpenStreetMap Voice Assistant
 
-A modular Python assistant that lets you **ask spoken or typed questions** about the world, **query OpenStreetMap** using natural language, **summarize** results using LLaMA, and **speak the answer** back in your cloned voice.
+## ✨ What it does
 
----
+- 🎙️ Voice input (Whisper) or text input (CLI/file)
+- 🧭 OSM flow: Natural language → Overpass QL → Overpass results → (optional) OSRM route → FLAN summary
+- 🧠 General flow: Ask LLaMA anything (local), then speak it
+- 🌍 Multilingual: detect input language, translate summaries, speak in your chosen voice/language
+- 🔊 TTS via **Piper** (fast local voices)
 
-## ✨ Features
+> **Note:** These scripts use **Piper TTS**, not OpenVoice/MELo. Voice “speaker” picks a Piper voice model you’ve installed.
 
-* 🎙️ **Voice input** (via Whisper) or text input (via CLI/file)
-* 🌐 **Multilingual natural language → Overpass QL** mapping
-* 🧠 **LLM summarization** of OpenStreetMap data (LLaMA or other)
-* 🗣️ **Voice cloning & TTS** with OpenVoice + MELo
-* 🧭 **Route directions** (via OSRM) if applicable
-* ⚡ CLI interface with FastAPI + browser integration coming soon
 
----
 
-## 📦 Installation
+## 🗂️ Scripts
 
-### 1. Clone and install OpenVoice
+### `backend/run_assistant_osm.py` — OpenStreetMap & directions
+Use this for **map-centric questions** that involve places, proximity, or routes.
+
+**Best for**
+- “How do I get from **Point A to Point B** (walk/bike/car)?”
+- “**Where are the closest cafés** to here?”
+- “Find **pharmacies near me**.”
+- “Show **wheelchair-accessible toilets** near 48.8566, 2.3522.”
+
+**What it does**
+1) Parses your natural-language question into an **Overpass QL** query  
+2) Calls **Overpass API** (POIs, amenities, features)  
+3) If it’s a routing question, calls **OSRM** for step-by-step directions  
+4) Summarizes results with a **FLAN** model  
+5) Speaks the answer with **Piper TTS**
+
+**Tips**
+- Modes like `walk/bike/car` are supported in routing.
+- Use `--save-json` to dump raw Overpass results.
+
+
+
+### `backend/run_assistant_general.py` — General (non-map) inquiries
+Use this for **general knowledge or descriptive questions** that aren’t about routing or nearby places.
+
+**Best for**
+- “**Tell me about Mount Everest**.”
+- “What’s the **history of the Eiffel Tower**?”
+- “What are the **top 10 tallest mountains**?”
+
+**What it does**
+1) Takes your question (voice or text)  
+2) Generates an answer with your local **LLaMA** model  
+3) Speaks the answer with **Piper TTS**
+
+**Not for**
+- Live map data, nearby searches, or directions (use `run_assistant_osm.py` instead).
+
+
+
+
+## 🔧 Installation
+
+### System deps
+- `ffmpeg` (pydub)
+- `portaudio` (sounddevice)
 
 ```bash
-git clone https://github.com/myshell-ai/OpenVoice.git
-cd OpenVoice
-pip install -e .
-```
+# macOS
+brew install ffmpeg portaudio
 
-### 2. Download OpenVoice Checkpoints
+# Ubuntu
+sudo apt-get update
+sudo apt-get install -y ffmpeg portaudio19-dev
+````
 
-```bash
-curl -L -o checkpoints_v2_0417.zip \
-  https://myshell-public-repo-host.s3.amazonaws.com/openvoice/checkpoints_v2_0417.zip
-
-mkdir checkpoints_v2
-unzip checkpoints_v2_0417.zip -d checkpoints_v2
-rm checkpoints_v2_0417.zip
-```
-
-<details>
-<summary><strong>Windows PowerShell version</strong></summary>
-
-```powershell
-Invoke-WebRequest -Uri https://myshell-public-repo-host.s3.amazonaws.com/openvoice/checkpoints_v2_0417.zip `
-  -OutFile checkpoints_v2_0417.zip
-New-Item -ItemType Directory -Path checkpoints_v2
-Expand-Archive -Path checkpoints_v2_0417.zip -DestinationPath checkpoints_v2
-Remove-Item checkpoints_v2_0417.zip
-```
-
-</details>
-
-### 3. (Optional) Download LLaMA Model for Summarization
-
-```bash
-mkdir models
-cd models
-curl -L -o llama-2-7b-chat.Q4_K_M.gguf https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf
-```
-
-### 4. Install Python Dependencies
+### Python deps
 
 ```bash
 pip install \
   openai-whisper \
-  webrtcvad \
   sounddevice \
+  pydub \
   scipy \
   numpy \
-  pydub \
-  overpy \
   requests \
-  llama-cpp-python \
   transformers \
-  spacy \
   langdetect \
-  deep-translator \
-  geopy
+  deep-translator
+```
 
+If your parser uses spaCy (recommended):
+
+```bash
+pip install spacy
 python -m spacy download en_core_web_sm
 ```
 
-**Also install Whisper CLI:**
+**Piper TTS**
 
-```bash
-pip install git+https://github.com/openai/whisper.git
-```
+* Install your preferred method (binary or Python wrapper) and download one or more **Piper voice models**.
+* Make sure `backend/utils/speak_piper.py` can find your voices (see its `MODEL_DIR` and your `--speaker`/`--language` usage).
 
-**Install OpenVoice + MELo TTS:**
+**LLaMA (for general assistant)**
 
-```bash
-apt update && apt install -y mecab libmecab-dev mecab-ipadic-utf8
-pip install git+https://github.com/myshell-ai/MeloTTS.git
-python -m unidic download
-```
+* Provide a local model that `backend.utils.llama_singleton.get_llm()` can load (often via `llama-cpp-python` with a GGUF file).
 
-### 5. System Requirements
+**FLAN (for OSM summaries)**
 
-* `portaudio` (for `sounddevice`)
+* `backend.utils.overpass_to_osm_flan` should pull a FLAN-T5 model via `transformers` (e.g., `google/flan-t5-base/large`). No extra step if it auto-downloads.
 
-  * macOS: `brew install portaudio`
-  * Ubuntu: `sudo apt-get install portaudio19-dev`
-* `ffmpeg` (for MP3 support via `pydub`)
 
-  * macOS: `brew install ffmpeg`
-  * Ubuntu: `sudo apt-get install ffmpeg`
 
----
+## 🧠 How it works
 
-## 🗂️ Project Structure
+### OSM flow (`run_assistant_osm.py`)
 
-```
-osm_voice_assistant/
-├── run_assistant.py              # Main CLI interface
-├── models/                       # LLaMA or other local LLMs
-├── utils/
-│   ├── transcribe.py             # Record + transcribe audio (Whisper)
-│   ├── question_to_overpass.py   # Parse natural language into Overpass QL
-│   ├── overpass_to_osm.py        # Run Overpass query + summarize results
-│   ├── speak.py                  # Voice synthesis (OpenVoice + MELo)
-│   └── create_speaker.py         # Generate custom speaker embedding
-```
+1. **Input**: record (Whisper) or `--text/--text-file`
+2. **Detect language** (`langdetect`)
+3. **Parse**: `parse_question()` → intent, bounding box/center, start/end coords, mode, etc.
+4. **(Optional) Directions**: If mode is `route_check` or `route_via`, fetch route via **OSRM** and summarize path.
+5. **Build Overpass QL**: `build_overpass_query()`
+6. **Query Overpass**: `run_overpass_query()`
+7. **Summarize**: `summarize_results()` using **FLAN**
+8. **Translate** (if non-English input): `deep_translator.GoogleTranslator`
+9. **Speak**: `speak_piper.speak()` with **Piper** TTS
 
----
+### General flow (`run_assistant_general.py`)
+
+1. **Input**: record (Whisper) or `--text/--text-file`
+2. **Ask LLaMA**: `get_llm()` returns your configured local LLaMA
+3. **Speak**: **Piper** TTS
+
+
 
 ## 🚀 Usage
 
-### 1. Create a Custom Speaker Voice
+### OSM assistant
 
 ```bash
-python utils/create_speaker.py \
-  --reference sample_audio/arnold_original.mp3 \
-  --speaker-name arnold
+# Nearby POIs with geo context
+python -m backend.run_assistant_osm \
+  --speaker amy \
+  --language en \
+  --text "Are there any coffee shops nearby?" \
+  --lat 50.6683 \
+  --lon 4.6156
+
+# Route + map info
+python -m backend.run_assistant_osm \
+  --speaker amy \
+  --language en \
+  --text "How do I get from Grand Place to Parc du Cinquantenaire?"
 ```
 
-➡️ Saves to: `checkpoints_v2/base_speakers/ses/arnold.pth`
+**Flags**
 
----
+* `--speaker` *(str)*: Piper voice key (maps to a voice model file)
+* `--language` *(str)*: Piper voice language tag (e.g., `en`, `fr`)
+* `--speed` *(float)*: TTS speed (default `1.0`)
+* `--text` / `--text-file`: provide input without recording
+* `--lat`, `--lon`: user position (helps “near me”)
+* `--save-json`: save raw Overpass results to `osm_assistant_output/raw.json`
+* `--output-mode`: `file` or `stream` (TTS output handling)
 
-### 2. Run the Voice Assistant CLI
+### General assistant
 
 ```bash
-python run_assistant.py --speaker arnold --language EN_NEWEST --speed 1.0
+python -m backend.run_assistant_general \
+  --speaker amy \
+  --language en \
+  --text "Where are the top 10 tallest mountains?"
 ```
 
-#### Text-Based Queries:
+**Flags**
 
-```bash
-python run_assistant.py --speaker arnold --text "Where are the vegan restaurants in Lyon?"
-python run_assistant.py --speaker arnold --text "How do I get from Times Square to Central Park?"
-python run_assistant.py --speaker arnold --text "Où est le marché aux puces à Paris ?" --language FR
+* `--speaker`, `--language`, `--speed`, `--text`, `--text-file`, `--output-mode`
+
+---
+
+## 📦 Project layout (key parts)
+
+```
+backend/
+├── run_assistant_osm.py
+├── run_assistant_general.py
+└── utils/
+    ├── transcribe.py                # Whisper recorder/transcriber
+    ├── speak_piper.py               # Piper TTS (find_best_piper_model, speak)
+    ├── question_to_overpass.py      # parse_question(), build_overpass_query()
+    ├── overpass_to_osm_flan.py      # run_overpass_query(), summarize_results(), summarize_route(), warmup_summariser()
+    └── llama_singleton.py           # get_llm() → local LLaMA
 ```
 
-#### With Geolocation:
 
-```bash
-python run_assistant.py --speaker arnold --text "Are there any pharmacies nearby?" --lat 50.6683 --lon 4.6156
-```
 
-Steps:
+## 🌍 Multilingual behavior
 
-1. Question is either spoken, typed, or read from a file
-2. Language is detected and optionally translated
-3. Location and intent are parsed
-4. Overpass QL query is built and run
-5. Optionally: Directions are fetched via OSRM
-6. Summary is generated via LLaMA
-7. If not in English, translated
-8. TTS response is played using cloned voice
+* Input language is **detected** automatically.
+* OSM summaries are produced in **English** by FLAN, then **translated** back to the detected language if needed.
+* TTS language must match an installed **Piper voice**; control via `--language`.
 
----
 
-## 🌐 API (Coming Soon)
 
-A FastAPI version is in development. Basic sketch:
+## ⚠️ Notes & limits
 
-```python
-@app.get("/ask")
-async def ask():
-    question, lang = record_and_transcribe()
-    osm_json = parse_question_to_overpass(question)
-    summary = summarize_osm_results(osm_json)
-    speak(summary, language=lang, speaker_key="arnold")
-    return {"question": question, "summary": summary}
-```
+* OSRM/Overpass are online services; expect network variability.
+* OSM summaries use FLAN; general Q\&A uses your configured LLaMA.
+* Piper speakers are voice models you install; there’s no OpenVoice/MELo in these scripts.
 
----
 
-## 🌍 Multilingual Support
-
-* **Input**: Whisper + `langdetect` + optional `deep-translator` to English
-* **Output**: Summary spoken in user's language using OpenVoice (if available)
-* Use `--language` to control TTS language (must match speaker model)
-
----
-
-## 💡 Tips
-
-* Use `--save-json` to save raw OSM results to `osm_assistant_output/raw.json`
-* Combine with lat/lon for context-aware queries (e.g., “near me”)
-* LLaMA summarization currently returns English output before optional translation
-
----
-
-## ⚠️ Known Limitations
-
-* LLaMA summarization is English only (translation handled after)
-* Speaker voice must be created in advance for each language
-* OSRM directions only available for "walk", "bike", or "car"
-
----
 
 ## 🔜 Roadmap
 
-* [ ] Web UI for voice control
-* [ ] RAG using OSM wiki/tag metadata
-* [ ] Smarter fallback if query fails
-* [ ] Interactive map + speech overlay
+* FastAPI endpoint + simple web UI
+* RAG with OSM wiki/tag metadata
+* Richer landmark-based routing cues + via-points
+* Map preview export
 
----
+
 
 ## 🗑 License
 
 MIT © ScreenToSoundscapes
-Build your own voice-first mapping assistant using OSM and LLMs.
 
----
-
-## 🖥 Demo (Preview)
-
-🔗 [DEMO Environment](https://screen2soundscape-671d28241a35.herokuapp.com/)
-
-![screenshot](https://github.com/user-attachments/assets/bed1fcf3-4f42-4772-9c38-9fd18e604516)
-
----
-
-Let me know if you'd like a Markdown file version, a server `README`, or a minimal public version for GitHub.
