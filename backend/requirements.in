@@ -26,4 +26,4 @@ torch==2.8.0
 transformers==4.56.1
 piper==0.14.4
 scipy==1.16.1
-whisper==1.1.10
+openai-whisper
