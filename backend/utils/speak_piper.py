@@ -18,7 +18,7 @@ import torch
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "osm_assistant_speaker_audio")
 # MODEL_DIR = os.path.join(BASE_DIR, "piper_models")
-MODEL_DIR = "backend/piper_models"
+MODEL_DIR = "piper_models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 DEFAULT_LANGUAGE = 'en'
@@ -47,14 +47,14 @@ def find_best_piper_model(base_path, language, speaker):
     """
     # Map short language code to Piper folder structure
     lang_map = {
-        "en": "en/en_US",
-        "fr": "fr/fr_FR",
-        "de": "de/de_DE",
-        "es": "es/es_ES",
-        "it": "it/it_IT",
-        "pt": "pt/pt_PT",
-        "nl": "nl/nl_NL",
-        "zh": "zh/zh_CN"
+        "en": os.path.join("en", "en_US"),
+        "fr": os.path.join("fr", "fr_FR"),
+        "de": os.path.join("de", "de_DE"),
+        "es": os.path.join("es", "es_ES"),
+        "it": os.path.join("it", "it_IT"),
+        "pt": os.path.join("pt", "pt_PT"),
+        "nl": os.path.join("nl", "nl_NL"),
+        "zh": os.path.join("zh", "zh_CN")
         # other languages can be added here
     }
     
