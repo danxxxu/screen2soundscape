@@ -34,6 +34,7 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
             }))
 
             if message.startswith("?"):
+                message = message[1:]
                 output = run_assistant_osm.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, False, message,  None, lat=lat, lon=lon, output_mode='stream')
             else:
                 output = run_assistant_general.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, message, None, output_mode='stream')
