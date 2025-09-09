@@ -9,6 +9,8 @@ from pathlib import Path
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 
+from backend import run_assistant_osm, run_assistant_general
+
 
 class AudioStreamConsumer(AsyncWebsocketConsumer):
     # --- configure your defaults here ---
@@ -38,7 +40,7 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
             }))
 
             # Kick off the assistant and stream its output back
-            await self.run_assistant_and_stream_output(user_message=message)
+            await self.run_assistant_osm_and_stream_output(user_message=message)
 
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
@@ -59,72 +61,15 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
         back over the websocket. If it prints an AUDIO_FILE=... line, we stream that file too.
         """
         # Build the command using this Python interpreter
-        cmd = [
-            sys.executable, "-m", "backend.run_assistant_osm",
-            "--speaker", self.DEFAULT_SPEAKER,
-            "--text", user_message,
-            "--lat", self.DEFAULT_LAT,
-            "--lon", self.DEFAULT_LON,
-            "--language", self.DEFAULT_LANG,
-        ]
 
-        # Notify client we started
+        output = run_assistant_general.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, user_message, None, output_mode='stream')
+
         await self.send(text_data=json.dumps({
             "type": "assistant_start",
             "message": "Starting assistant"
         }))
 
-        # Start subprocess (non-blocking)
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
 
-        audio_path_found = None
-
-        async def _read_stream(stream, stream_type: str):
-            nonlocal audio_path_found
-            while True:
-                line = await stream.readline()
-                if not line:
-                    break
-                decoded = line.decode(errors="ignore").rstrip()
-
-                # Try to detect an audio path from the assistant's output
-                maybe_path = self.parse_audio_path_from_line(decoded)
-                if maybe_path and not audio_path_found:
-                    audio_path_found = maybe_path
-
-                # Stream incremental logs to the client
-                await self.send(text_data=json.dumps({
-                    "type": "assistant_log",
-                    "stream": stream_type,
-                    "message": decoded
-                }))
-
-        # Read both stdout and stderr concurrently
-        stdout_task = asyncio.create_task(_read_stream(proc.stdout, "stdout"))
-        stderr_task = asyncio.create_task(_read_stream(proc.stderr, "stderr"))
-
-        # Wait for process to finish
-        await asyncio.gather(stdout_task, stderr_task)
-        return_code = await proc.wait()
-
-        await self.send(text_data=json.dumps({
-            "type": "assistant_done",
-            "return_code": return_code
-        }))
-
-        # If an audio file was announced, stream it
-        if audio_path_found:
-            await self.stream_file(audio_path_found)
-        else:
-            # Fall back to your sample file if you still want to stream something
-            # Comment this out if you don't want a fallback
-            # await self.stream_file(os.path.join(settings.BASE_DIR, 'sample_audio', 'arnold_original.mp3'))
-            pass
-        
     async def run_assistant_general_and_stream_output(self, user_message: str, output_mode: str = "file"):
         """
         Spawns `python -m backend.run_assistant_general ...` and streams stdout/stderr lines
@@ -232,8 +177,8 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
             "return_code": return_code
         }))
 
-        # If an audio file was announced, stream it
-        if audio_path_found and output_mode == "file":
+        # Stream the audio file if one was found
+        if audio_path_found:
             await self.stream_file(audio_path_found)
 
     @staticmethod
@@ -241,10 +186,13 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
         """
         Detect a produced audio file path from a log line.
         Adjust this pattern to whatever your assistant prints.
-        Examples it will catch:
-          AUDIO_FILE=path/to/file.mp3
-          audio_file: C:\...\out.wav
+
         """
+        # Try the actual format from run_assistant_general.py: "🔉 Output audio: {path}"
+        m = re.search(r"🔉\s*Output\s+audio:\s*(.+\.(?:mp3|wav|ogg|flac))", line, re.IGNORECASE)
+        if m:
+            return m.group(1).strip('"').strip("'")
+
         # Try common "key=value" format
         m = re.search(r"(?:^|\b)AUDIO_FILE\s*=\s*(.+\.(?:mp3|wav|ogg|flac))\b", line, re.IGNORECASE)
         if m:

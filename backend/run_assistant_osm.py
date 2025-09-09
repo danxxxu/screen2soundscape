@@ -147,7 +147,6 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     # Step 5: Summarize results
     print("🕒 Step 5: Summarizing results with LLM...")
     t9 = time.time()
-    # summary = summarize_results(question, results)
     summary = summarize_results(question, results)
     t10 = time.time()
     print("✅ Summary (English):")
@@ -188,7 +187,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
 
     total_time = t12 - t1
     print(f"🎉 Assistant process completed in {total_time:.2f} seconds.")
-
+    return output
     
     
 if __name__ == "__main__":

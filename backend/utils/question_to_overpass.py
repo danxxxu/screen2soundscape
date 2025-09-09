@@ -192,12 +192,14 @@ def build_overpass_query(P):
         selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
 
     selector = " and ".join(selector_parts) if selector_parts else ""
+    # Only include brackets if there are actual selectors
+    selector_brackets = f"[{selector}]" if selector else ""
 
     # Use area if available
     if P.get("place_name") and P["place_name"] != "user_location":
         try:
             area_id = _osm_nominatim.query(P["place_name"]).areaId()
-            return f'[out:json][timeout:25];(node(area:{area_id})[{selector}];way(area:{area_id})[{selector}];relation(area:{area_id})[{selector}];);out body;'
+            return f'[out:json][timeout:25];(node(area:{area_id}){selector_brackets};way(area:{area_id}){selector_brackets};relation(area:{area_id}){selector_brackets};);out body;'
         except Exception as e:
             print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
 
@@ -205,6 +207,6 @@ def build_overpass_query(P):
     if P.get("center") and P.get("radius"):
         lat, lon = P["center"]
         radius = P["radius"]
-        return f'[out:json][timeout:25];(node(around:{radius},{lat},{lon})[{selector}];way(around:{radius},{lat},{lon})[{selector}];relation(around:{radius},{lat},{lon})[{selector}];);out body;'
+        return f'[out:json][timeout:25];(node(around:{radius},{lat},{lon}){selector_brackets};way(around:{radius},{lat},{lon}){selector_brackets};relation(around:{radius},{lat},{lon}){selector_brackets};);out body;'
 
     raise ValueError("❌ Cannot build query: no area or coordinates available.")
