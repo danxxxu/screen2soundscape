@@ -15,6 +15,12 @@ var is_audio_ready: bool = false
 # WebSocket server URL
 var server_url: String = "ws://localhost:8000/ws/audio/"
 
+# Reference to player for getting position
+var player: CharacterBody3D
+
+# Import MapUtils constants
+const MapUtils = preload("res://src/map_utils.gd")
+
 func _ready():
 	# Create WebSocket peer
 	websocket = WebSocketPeer.new()
@@ -22,6 +28,9 @@ func _ready():
 	# Create audio stream player
 	audio_stream_player = AudioStreamPlayer.new()
 	add_child(audio_stream_player)
+	
+	# Get reference to player
+	player = get_node("../Player")
 	
 	# Connect signals
 	audio_stream_player.finished.connect(_on_audio_finished)
@@ -46,19 +55,40 @@ func connect_to_server():
 	
 	print("Connection request sent to WebSocket server")
 
+func get_player_coordinates() -> Dictionary:
+	if not player:
+		return {"lat": 0.0, "lon": 0.0}
+	
+	# Get player position
+	var player_pos = player.global_position
+	
+	# Convert local coordinates to lat/lon using MapUtils
+	var local_pos = Vector2(player_pos.x, player_pos.z)
+	var global_coords = MapUtils.convert_to_global_coords(local_pos)
+	
+	return {"lat": global_coords.x, "lon": global_coords.y}
+
 func send_command(command_text: String):
+	# Get player coordinates
+	var coords = get_player_coordinates()
+	
+	# Create message with command and coordinates
+	var message = {
+		"message": command_text,
+		"lat": coords.lat,
+		"lon": coords.lon
+	}
+	
 	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		var message = {"message": command_text}
 		var json_string = JSON.stringify(message)
 		websocket.send_text(json_string)
 		print("Sent command to WebSocket: ", json_string)
 	else:
 		print("WebSocket not connected, attempting to reconnect...")
 		connect_to_server()
-		# Wait a moment for connection attempt, then try to send again
+		
 		await get_tree().create_timer(0.5).timeout
 		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-			var message = {"message": command_text}
 			var json_string = JSON.stringify(message)
 			websocket.send_text(json_string)
 			print("Sent command to WebSocket after reconnection: ", json_string)

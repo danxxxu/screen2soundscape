@@ -30,3 +30,19 @@ static func convert_to_local_coords(lat: float, lon: float) -> Vector2:
 	z = clamp(z * MAP_SIDE_LENGTH, -MAP_SIDE_LENGTH / 2, MAP_SIDE_LENGTH / 2)
 	
 	return Vector2(x, z)
+
+# Convert local coordinates back to lat/lon
+static func convert_to_global_coords(local_pos: Vector2) -> Vector2:
+	# Convert from local coordinates back to lat/lon differences
+	var x = local_pos.x / MAP_SIDE_LENGTH
+	var z = local_pos.y / MAP_SIDE_LENGTH
+	
+	# Convert back to lat/lon differences
+	var lon_diff = x / (cos(deg_to_rad(START_LAT)) * SCALE_FACTOR)
+	var lat_diff = z / SCALE_FACTOR
+	
+	# Add to start coordinates
+	var lat = START_LAT + lat_diff
+	var lon = START_LON + lon_diff
+	
+	return Vector2(lat, lon)

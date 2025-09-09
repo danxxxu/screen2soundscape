@@ -23,6 +23,8 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             message = data.get("message", "")
+            lat = data.get("lat")
+            lon = data.get("lon")
 
             print(f"Received message: {message}")
 
@@ -32,7 +34,7 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
             }))
 
             if message.startswith("?"):
-                output = run_assistant_osm.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, False, message, None, output_mode='stream')
+                output = run_assistant_osm.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, False, message,  None, lat=lat, lon=lon, output_mode='stream')
             else:
                 output = run_assistant_general.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, message, None, output_mode='stream')
             await self.stream_audio_bytes(output)
