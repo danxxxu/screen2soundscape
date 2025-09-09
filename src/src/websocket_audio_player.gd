@@ -53,7 +53,17 @@ func send_command(command_text: String):
 		websocket.send_text(json_string)
 		print("Sent command to WebSocket: ", json_string)
 	else:
-		print("WebSocket not connected, cannot send command: ", command_text)
+		print("WebSocket not connected, attempting to reconnect...")
+		connect_to_server()
+		# Wait a moment for connection attempt, then try to send again
+		await get_tree().create_timer(0.5).timeout
+		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			var message = {"message": command_text}
+			var json_string = JSON.stringify(message)
+			websocket.send_text(json_string)
+			print("Sent command to WebSocket after reconnection: ", json_string)
+		else:
+			print("Failed to reconnect, cannot send command: ", command_text)
 
 func _process(delta):
 	websocket.poll()
