@@ -40,13 +40,6 @@ from backend.utils.overpass_to_osm_flan import (
     warmup_summariser
 )
 
-# from utils.overpass_to_osm_llama import (
-#     run_overpass_query,
-#     summarize_results,
-#     summarize_route
-# )
-
-
 warmup_summariser() 
 
 def detect_language(text):
