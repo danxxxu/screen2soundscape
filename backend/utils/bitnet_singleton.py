@@ -1,99 +1,256 @@
 # backend/utils/bitnet_singleton.py
+"""
+bitnet.cpp-backed chat wrapper with sentence-level streaming.
+
+- Prefers a local GGUF in: backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/
+- Falls back to a model path provided via `bitnet_model` args.
+- Uses a simple System/User/Assistant prompt. We stream stdout from the process,
+  wait until we detect the "Assistant:" sentinel, then yield sentences as they complete.
+
+Expose two public entry points:
+  - chat(messages, ...) -> str              # full, blocking
+  - stream_chat(messages, ...) -> iterator  # yields sentences as they complete
+"""
+
 import os
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import re
+import glob
+import shlex
+import subprocess
+from typing import Iterable, Iterator, List, Dict, Optional
 
-# Project root
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
+# ------- Paths / discovery -------
 
-# Your local path:  .../models/microsoft/bitnet-b1.58-2B-4T
-LOCAL_MODEL_DIR = os.path.join(ROOT_DIR, "models", "microsoft", "bitnet-b1.58-2B-4T")
+def _project_root() -> str:
+    return os.path.dirname(os.path.dirname(__file__))
 
-# Fallback HF repo id (only used if local dir not found)
-REMOTE_MODEL_ID = os.getenv("BITNET_MODEL_ID", "microsoft/bitnet-b1.58-2B-4T")
+def default_gguf_dir() -> str:
+    return os.path.join(_project_root(), "models", "microsoft", "bitnet-b1.58-2B-4T-gguf")
 
-_tokenizer = None
-_model = None
+def _prefer_gguf(files: List[str]) -> Optional[str]:
+    if not files:
+        return None
+    for f in files:
+        if "i2_s" in os.path.basename(f).lower():
+            return f
+    return files[0]
 
-def _pick_device():
-    if torch.cuda.is_available():
-        return "cuda"
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
-
-def _torch_dtype_for(device: str):
-    # MPS works best with float16; others use bfloat16
-    return torch.float16 if device == "mps" else torch.bfloat16
-
-def _load_from_source(src: str, device: str, local: bool):
-    kwargs = dict(torch_dtype=_torch_dtype_for(device))
-    if local:
-        kwargs["local_files_only"] = True
-
-    tokenizer = AutoTokenizer.from_pretrained(src, trust_remote_code=False, **({"local_files_only": True} if local else {}))
-    if tokenizer.pad_token_id is None and tokenizer.eos_token is not None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model = AutoModelForCausalLM.from_pretrained(src, **kwargs)
-    if device != "cpu":
-        model = model.to(device)
-
-    # Ensure PAD/EOS in generation config
-    if model.generation_config.pad_token_id is None and tokenizer.pad_token_id is not None:
-        model.generation_config.pad_token_id = tokenizer.pad_token_id
-    if model.generation_config.eos_token_id is None and tokenizer.eos_token_id is not None:
-        model.generation_config.eos_token_id = tokenizer.eos_token_id
-
-    return tokenizer, model
-
-def get_bitnet():
-    """Returns (tokenizer, model, device), preferring local model dir if present."""
-    global _tokenizer, _model
-    if _model is not None:
-        return _tokenizer, _model, _model.device.type
-
-    device = _pick_device()
-    if os.path.isdir(LOCAL_MODEL_DIR):
-        src = LOCAL_MODEL_DIR
-        local = True
-    else:
-        src = REMOTE_MODEL_ID
-        local = False
-
-    _tokenizer, _model = _load_from_source(src, device, local)
-    return _tokenizer, _model, device
-
-def chat(
-    messages,
-    max_new_tokens=256,
-    temperature=0.7,
-    top_p=0.95,
-    do_sample=True,
-):
+def find_gguf_model(path_hint: Optional[str] = None) -> Optional[str]:
     """
-    Chat wrapper. `messages`: [{"role":"system","content":"..."}, {"role":"user","content":"..."}]
+    Resolve a usable GGUF path.
+    - If `path_hint` is a file *.gguf -> return it
+    - If `path_hint` is a dir -> search inside for *.gguf (prefers i2_s)
+    - Else, search the default gguf dir
     """
-    tokenizer, model, _ = get_bitnet()
+    def search_dir(d: str) -> List[str]:
+        if not os.path.isdir(d):
+            return []
+        hits = glob.glob(os.path.join(d, "*.gguf"))
+        if not hits:
+            hits = glob.glob(os.path.join(d, "**", "*.gguf"), recursive=True)
+        return sorted(hits)
 
-    prompt = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True
+    if path_hint:
+        if os.path.isfile(path_hint) and path_hint.endswith(".gguf"):
+            return path_hint
+        if os.path.isdir(path_hint):
+            return _prefer_gguf(search_dir(path_hint))
+        return None
+
+    return _prefer_gguf(search_dir(default_gguf_dir()))
+
+# ------- Prompting -------
+
+ASSISTANT_TAG = "Assistant:"
+
+def build_chat_prompt(system_prompt: str, user_prompt: str) -> str:
+    # Keep it plain-text so any bitnet.cpp build can consume it.
+    return (
+        f"System instruction:\n{system_prompt.strip()}\n\n"
+        f"User:\n{user_prompt.strip()}\n\n"
+        f"{ASSISTANT_TAG}\n"
     )
-    inputs = tokenizer(prompt, return_tensors="pt")
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
-    outputs = model.generate(
-        **inputs,
+# ------- Streaming process glue -------
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+def strip_ansi(s: str) -> str:
+    return ANSI_RE.sub("", s)
+
+SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")  # simple heuristic; avoids some abbrev false-positives
+
+def _spawn_bitnet(
+    bitnet_bin: str,
+    model_path: str,
+    prompt: str,
+    max_new_tokens: int,
+    threads: Optional[int],
+    ctx: int,
+    temperature: float,
+    top_p: float,
+    extra_args: Optional[List[str]],
+) -> subprocess.Popen:
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"GGUF model not found: {model_path}")
+
+    if threads is None:
+        threads = os.cpu_count() or 4
+
+    cmd = [
+        bitnet_bin,
+        "-m", model_path,
+        "-p", prompt,
+        "-n", str(max_new_tokens),
+        "-t", str(threads),
+        "-c", str(ctx),
+        "--temp", str(temperature),
+        "--top-p", str(top_p),
+    ]
+    if extra_args:
+        cmd.extend(extra_args)
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,          # line-buffered (best we can do portably)
+            universal_newlines=True,
+        )
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"bitnet.cpp binary not found: {bitnet_bin}\n"
+            f"Command tried: {' '.join(shlex.quote(x) for x in cmd)}"
+        ) from e
+
+    return proc
+
+def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]:
+    """
+    Yield raw text as it arrives from stdout. We suppress everything until `wait_for_tag`
+    is seen in the accumulated buffer so echoed prompt doesn't leak.
+    """
+    if not proc.stdout:
+        return
+
+    buf_all = ""
+    saw_tag = False
+
+    # Read character-by-character to minimize latency
+    while True:
+        ch = proc.stdout.read(1)
+        if ch == "" or ch is None:  # EOF
+            break
+        buf_all += ch
+
+        if not saw_tag:
+            if wait_for_tag in buf_all:
+                saw_tag = True
+            continue
+
+        # After we see the tag, yield the *new* char only
+        yield ch
+
+    # Drain stderr on exit for debugging if needed
+    proc.wait()
+    if proc.returncode not in (0, None):
+        if proc.stderr:
+            err = proc.stderr.read()
+            raise RuntimeError(f"bitnet.cpp exited with {proc.returncode}:\n{err}")
+
+def stream_chat(
+    messages: List[Dict[str, str]],
+    *,
+    # generation
+    max_new_tokens: int = 256,
+    temperature: float = 0.7,
+    top_p: float = 0.95,
+    # runtime
+    bitnet_bin: str = "bitnet",
+    bitnet_model: Optional[str] = None,    # file or dir; auto-detect if None
+    threads: Optional[int] = None,
+    ctx: int = 4096,
+    extra_args: Optional[List[str]] = None,
+) -> Iterator[str]:
+    """
+    Stream sentences as they complete (naive segmenter). Yields strings that end in . ! or ? (mostly).
+
+    messages: [{"role":"system","content":"..."}, {"role":"user","content":"..."}]
+    """
+    # Extract content
+    system_msg = next((m["content"] for m in messages if m.get("role") == "system"), "")
+    user_msg   = next((m["content"] for m in messages if m.get("role") == "user"), "")
+
+    # Resolve gguf
+    model_path = find_gguf_model(bitnet_model)
+    if not model_path:
+        raise FileNotFoundError(
+            "No GGUF model found. Provide bitnet_model or place one in "
+            f"{default_gguf_dir()}"
+        )
+
+    # Build prompt & launch
+    prompt = build_chat_prompt(system_msg, user_msg)
+    proc = _spawn_bitnet(
+        bitnet_bin=bitnet_bin,
+        model_path=model_path,
+        prompt=prompt,
         max_new_tokens=max_new_tokens,
-        do_sample=do_sample,
+        threads=threads,
+        ctx=ctx,
         temperature=temperature,
         top_p=top_p,
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
+        extra_args=extra_args,
     )
 
-    start = inputs["input_ids"].shape[-1]
-    new_tokens = outputs[0, start:]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    # Accumulate chars into sentences
+    accum = ""
+    for ch in _iter_model_text(proc, wait_for_tag=ASSISTANT_TAG):
+        accum += ch
+        clean = strip_ansi(accum)
+
+        # Find the last full sentence end
+        m = SENTENCE_RE.search(clean)
+        if m:
+            end_idx = m.end()
+            sentence = clean[:end_idx]
+            remainder = clean[end_idx:]
+            # Reset accum to only remainder *including any partial ansi codes stripped already*
+            accum = remainder
+            # Yield trimmed sentence
+            yield sentence
+
+    # Yield leftover tail (if any)
+    tail = strip_ansi(accum).strip()
+    if tail:
+        yield tail
+
+def chat(
+    messages: List[Dict[str, str]],
+    *,
+    max_new_tokens: int = 256,
+    temperature: float = 0.7,
+    top_p: float = 0.95,
+    bitnet_bin: str = "bitnet",
+    bitnet_model: Optional[str] = None,
+    threads: Optional[int] = None,
+    ctx: int = 4096,
+    extra_args: Optional[List[str]] = None,
+) -> str:
+    """Blocking convenience wrapper that joins the streamed sentences into one string."""
+    parts = []
+    for sent in stream_chat(
+        messages,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
+        top_p=top_p,
+        bitnet_bin=bitnet_bin,
+        bitnet_model=bitnet_model,
+        threads=threads,
+        ctx=ctx,
+        extra_args=extra_args,
+    ):
+        parts.append(sent)
+    return "".join(parts).strip()
