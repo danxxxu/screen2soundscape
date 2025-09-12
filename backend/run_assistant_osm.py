@@ -1,7 +1,7 @@
-# run_assistant.py
+# backend/run_assistant.py
 import os
 
-os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"  # Must be first, before importing torch
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 # Suppress TensorFlow logs
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"      # 0=all logs, 1=filter INFO, 2=filter WARNING, 3=only errors
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"     # Disable oneDNN messages
@@ -147,7 +147,6 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
     # Step 5: Summarize results
     print("🕒 Step 5: Summarizing results with LLM...")
     t9 = time.time()
-    # summary = summarize_results(question, results)
     summary = summarize_results(question, results)
     t10 = time.time()
     print("✅ Summary (English):")
