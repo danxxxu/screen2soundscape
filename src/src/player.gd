@@ -39,6 +39,13 @@ var current_rotation: float = 0.0
 var is_near_buildings: bool = false
 var building_proximity_areas: Array = []
 
+# Microphone recording variables
+var is_recording: bool = false
+var audio_stream_player: AudioStreamPlayer
+var audio_effect_record: AudioEffectRecord
+var recording: AudioStreamWAV
+var websocket_audio_player: Node
+
 func set_movement_enabled(enabled: bool):
 	_movement_enabled = enabled
 
@@ -61,6 +68,10 @@ func _input(event):
 				else:
 					currentTarget = target
 					Speaker.speak('To the elevator')
+			if event.pressed and event.keycode == KEY_T:
+				start_recording()
+			elif not event.pressed and event.keycode == KEY_T:
+				stop_recording()
 
 
 func _process(delta):
@@ -86,6 +97,12 @@ func _ready():
 	var current_place = "the Kerkplein"
 	var to_find = "Cafe Dok 19"
 	#	Speaker.speak(" Hello ! You are at " + current_place + " facing north. Find " + to_find + ". Press shift to hear the proximity sensor to the search place. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.", "fr")
+	
+	# Setup microphone recording
+	setup_microphone_recording()
+	
+	# Get reference to websocket audio player
+	websocket_audio_player = get_node("../audio_streamer")
 
 	# Load the sliding sound
 	var sliding_sound = load("res://assets/sounds/sliding.mp3")
@@ -354,3 +371,140 @@ func find_nearest_building_distance() -> float:
 				min_distance = min(min_distance, distance_to_wall)
 	
 	return min_distance if min_distance < 999.0 else 10.0
+
+func setup_microphone_recording():
+	# Create audio stream player for microphone input
+	audio_stream_player = AudioStreamPlayer.new()
+	audio_stream_player.name = "MicrophoneRecorder"
+	add_child(audio_stream_player)
+	
+	# Create audio effect record
+	audio_effect_record = AudioEffectRecord.new()
+	
+	# Create audio bus for microphone input
+	var bus_index = AudioServer.get_bus_count()
+	AudioServer.add_bus(bus_index)
+	AudioServer.set_bus_name(bus_index, "Record")
+	AudioServer.add_bus_effect(bus_index, audio_effect_record)
+	
+	# ECHO PREVENTION: Mute the Record bus so microphone doesn't play back through speakers
+	AudioServer.set_bus_volume_db(bus_index, -80.0)  # -80dB effectively mutes it
+	AudioServer.set_bus_mute(bus_index, true)  # Also mute it completely
+	
+	# Set the audio stream player to use the record bus
+	audio_stream_player.bus = "Record"
+	
+	# Create microphone input stream
+	var microphone_stream = AudioStreamMicrophone.new()
+	audio_stream_player.stream = microphone_stream
+	
+	print("Microphone recording setup complete - microphone playback muted to prevent echo")
+
+func start_recording():
+	if is_recording:
+		return
+		
+	print("Starting microphone recording...")
+	is_recording = true
+	
+	# Start recording using AudioEffectRecord
+	if audio_effect_record:
+		audio_effect_record.set_recording_active(true)
+	
+	# Start the audio stream player to begin recording
+	audio_stream_player.play()
+	print("Audio stream player started")
+
+func stop_recording():
+	if not is_recording:
+		return
+		
+	print("Stopping microphone recording...")
+	is_recording = false
+	
+	# Stop the audio stream player
+	audio_stream_player.stop()
+	print("Audio stream player stopped")
+	
+	# Get the recording from AudioEffectRecord
+	if audio_effect_record and audio_effect_record.is_recording_active():
+		recording = audio_effect_record.get_recording()
+		audio_effect_record.set_recording_active(false)
+		print("Recording stopped and retrieved")
+		
+		# Process the recorded audio and send to WebSocket
+		process_and_send_audio()
+	else:
+		print("No active recording to stop")
+
+func process_and_send_audio():
+	if not recording:
+		print("No recording available")
+		return
+	
+	print("Processing recorded audio...")
+	print("Recording format: ", recording.format)
+	print("Recording mix rate: ", recording.mix_rate)
+	print("Recording stereo: ", recording.stereo)
+	
+	# Get the raw audio data from the recording
+	var audio_data = recording.data
+	print("Audio data size: ", audio_data.size(), " bytes")
+	
+	# Check if we have actual audio data
+	if audio_data.size() == 0:
+		print("No audio data in recording")
+		return
+	
+	# Debug: Check first few bytes to see if we have real audio
+	var has_audio = false
+	for i in range(min(100, audio_data.size())):
+		if audio_data[i] != 0:
+			has_audio = true
+			print("Found non-zero audio data at byte ", i, ": ", audio_data[i])
+			break
+	
+	if not has_audio:
+		print("Warning: No significant audio signal detected in recording")
+		# Still send the data, but log the issue
+	
+	# Send the complete audio file
+	send_complete_audio(audio_data)
+
+func send_complete_audio(audio_data: PackedByteArray):
+	if not websocket_audio_player:
+		print("WebSocket audio player not found")
+		return
+	
+	print("Sending audio file, size: ", audio_data.size(), " bytes")
+	
+	# Convert to base64 for transmission
+	var base64_data = Marshalls.raw_to_base64(audio_data)
+	print("Base64 data size: ", base64_data.length(), " characters")
+	
+	# Check if data is too large for single WebSocket message
+	# WebSocket typically has a limit around 64KB-1MB depending on implementation
+	var max_chunk_size = 32768  # 32KB chunks to be safe
+	
+	if base64_data.length() <= max_chunk_size:
+		# Small enough to send in one message
+		websocket_audio_player.send_audio_data(base64_data)
+		print("Audio file sent in single message")
+	else:
+		# Too large, need to chunk it
+		var total_chunks = (base64_data.length() + max_chunk_size - 1) / max_chunk_size
+		print("Audio file too large, sending in ", total_chunks, " chunks")
+		
+		var chunk_index = 0
+		for i in range(0, base64_data.length(), max_chunk_size):
+			var end_index = min(i + max_chunk_size, base64_data.length())
+			var chunk = base64_data.substr(i, end_index - i)
+			
+			# Send chunk with metadata
+			websocket_audio_player.send_audio_chunk(chunk, chunk_index, total_chunks)
+			chunk_index += 1
+			
+			# Small delay between chunks to prevent overwhelming the WebSocket
+			await get_tree().create_timer(0.01).timeout
+		
+		print("All audio chunks sent successfully")

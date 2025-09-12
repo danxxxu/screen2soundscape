@@ -18,6 +18,8 @@ config/icon="res://assets/images/icon.svg"
 [audio]
 
 general/text_to_speech=true
+driver/enable_input=true
+driver/mix_rate=44103
 
 [dotnet]
 

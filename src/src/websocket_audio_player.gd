@@ -191,5 +191,63 @@ func disconnect_from_server():
 		is_streaming = false
 		print("Disconnected from WebSocket server")
 
+func send_audio_data(audio_data: String):
+	# Get player coordinates
+	var coords = get_player_coordinates()
+	
+	# Create message with complete audio data
+	var message = {
+		"type": "audio_data",
+		"data": audio_data,
+		"lat": coords.lat,
+		"lon": coords.lon
+	}
+	
+	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		var json_string = JSON.stringify(message)
+		websocket.send_text(json_string)
+		print("Sent complete audio file to WebSocket")
+	else:
+		print("WebSocket not connected, attempting to reconnect...")
+		connect_to_server()
+		
+		await get_tree().create_timer(0.5).timeout
+		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			var json_string = JSON.stringify(message)
+			websocket.send_text(json_string)
+			print("Sent complete audio file to WebSocket after reconnection")
+		else:
+			print("Failed to reconnect, cannot send audio file")
+
+func send_audio_chunk(audio_chunk: String, chunk_index: int, total_chunks: int):
+	# Get player coordinates
+	var coords = get_player_coordinates()
+	
+	# Create message with audio chunk data
+	var message = {
+		"type": "audio_chunk",
+		"data": audio_chunk,
+		"chunk_index": chunk_index,
+		"total_chunks": total_chunks,
+		"lat": coords.lat,
+		"lon": coords.lon
+	}
+	
+	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		var json_string = JSON.stringify(message)
+		websocket.send_text(json_string)
+		print("Sent audio chunk ", chunk_index + 1, "/", total_chunks, " to WebSocket")
+	else:
+		print("WebSocket not connected, attempting to reconnect...")
+		connect_to_server()
+		
+		await get_tree().create_timer(0.5).timeout
+		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			var json_string = JSON.stringify(message)
+			websocket.send_text(json_string)
+			print("Sent audio chunk ", chunk_index + 1, "/", total_chunks, " to WebSocket after reconnection")
+		else:
+			print("Failed to reconnect, cannot send audio chunk: ", chunk_index)
+
 func _exit_tree():
 	disconnect_from_server() 
