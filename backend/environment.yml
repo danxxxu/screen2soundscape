@@ -8,8 +8,8 @@ dependencies:
   - pip
   - numpy=2.2
   - scipy=1.16.1
-  - pytorch=2.8.0
-  - pytorch-cpu=2.8.0
+  - pytorch=2.7.1 # linux latest
+  - pytorch-cpu=2.7.§ # linux latest
   - ffmpeg
   - portaudio
   - libsndfile
