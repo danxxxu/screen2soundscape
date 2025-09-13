@@ -10,6 +10,8 @@ import whisper
 import sys
 import os
 import datetime
+import base64
+import io
 from pydub import AudioSegment
 
 # — load Whisper model once —
@@ -130,6 +132,60 @@ def record_and_transcribe(
 
     print("Done.")
     return text, lang
+
+def transcribe_base64_audio(base64_data: str, sample_rate: int = 44100) -> tuple[str, str]:
+    """
+    Transcribe audio from base64 encoded data.
+    Handles various audio formats including raw PCM data from Godot.
+    Returns (transcription, language_code).
+    """
+    try:
+        # Decode base64 data
+        audio_bytes = base64.b64decode(base64_data)
+        
+        # Try to determine if it's already a WAV file or raw audio data
+        wav_path = None
+        
+        # Check if it starts with WAV header (RIFF)
+        if audio_bytes.startswith(b'RIFF') and b'WAVE' in audio_bytes[:12]:
+            # It's already a WAV file
+            print("Detected WAV format in base64 data")
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp.write(audio_bytes)
+                wav_path = tmp.name
+        else:
+            # Assume it's raw PCM data from Godot (16-bit signed integers)
+            print(f"Processing raw PCM audio data (sample rate: {sample_rate}Hz)")
+            
+            # Convert bytes to numpy array (assuming 16-bit signed integers)
+            audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+            
+            # Convert to float32 and normalize to [-1, 1]
+            audio_float = audio_array.astype(np.float32) / 32768.0
+            
+            # Create WAV file with proper header
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                sample_rate = 110000 # hack because of low sample rate of the mic  sample_rate * 2.75 == 110000
+                wav.write(tmp.name, sample_rate, audio_float)
+                wav_path = tmp.name
+        
+        print("Transcribing base64 audio with Whisper…")
+        result = _model.transcribe(wav_path)
+        text = result.get("text", "").strip()
+        lang = result.get("language", "unknown")
+        
+        # Cleanup temp file
+        try:
+            os.remove(wav_path)
+        except OSError:
+            pass
+            
+        print(f"Transcription completed: [{lang}] {text}")
+        return text, lang
+        
+    except Exception as e:
+        print(f"Error transcribing base64 audio: {str(e)}")
+        return "", "unknown"
 
 if __name__ == "__main__":
     """

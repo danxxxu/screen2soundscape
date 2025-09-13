@@ -180,7 +180,7 @@ def main(speaker, language, speed, save_json, text, text_file, lat=None, lon=Non
 
     total_time = t12 - t1
     print(f"🎉 Assistant process completed in {total_time:.2f} seconds.")
-
+    return output
     
     
 if __name__ == "__main__":
