@@ -2,12 +2,15 @@
 """
 bitnet.cpp-backed chat wrapper with sentence-level streaming.
 
-- Prefers a local GGUF in: backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/
-- Falls back to a model path provided via `bitnet_model` args.
-- Uses a simple System/User/Assistant prompt. We stream stdout from the process,
-  wait until we detect the "Assistant:" sentinel, then yield sentences as they complete.
+It supports TWO backends transparently:
+  1) C++ CLI binary ("bitnet") if present (fastest)
+  2) Official Python runner: BitNet/run_inference.py (fallback, no build needed)
 
-Public API:
+- Prefers a local GGUF in: backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/
+- Uses a simple System/User/Assistant prompt. We stream stdout from the process
+  and yield sentences as they complete.
+
+Public API (unchanged):
   - chat(messages, ...) -> str              # full, blocking
   - stream_chat(messages, ...) -> iterator  # yields sentences as they complete
 """
@@ -16,8 +19,10 @@ import os
 import re
 import glob
 import shlex
+import shutil
 import subprocess
-from typing import Iterable, Iterator, List, Dict, Optional, Tuple  # <- Tuple imported
+import sys
+from typing import Iterator, List, Dict, Optional
 
 # ------- Paths / discovery -------
 
@@ -64,25 +69,71 @@ def find_gguf_model(path_hint: Optional[str] = None) -> Optional[str]:
 ASSISTANT_TAG = "Assistant:"
 
 def build_chat_prompt(system_prompt: str, user_prompt: str) -> str:
-    # Keep it plain-text so any bitnet.cpp build can consume it.
+    # Keep it plain-text so any backend can consume it.
     return (
         f"System instruction:\n{system_prompt.strip()}\n\n"
         f"User:\n{user_prompt.strip()}\n\n"
         f"{ASSISTANT_TAG}\n"
     )
 
-# ------- Streaming process glue -------
+# ------- Streaming helpers -------
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-
 def strip_ansi(s: str) -> str:
     return ANSI_RE.sub("", s)
 
 # Avoids some abbrev false-positives; flush on sentence terminators.
 SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")
 
-def _spawn_bitnet(
-    bitnet_bin: str,
+# ------- Runner resolution -------
+
+def _default_py_runner() -> str:
+    """
+    Auto-detect BitNet/run_inference.py relative to the project root.
+    """
+    cand = os.path.join(_project_root(), "BitNet", "run_inference.py")
+    return cand if os.path.isfile(cand) else ""
+
+def _resolve_runner(bitnet_bin: str) -> dict:
+    """
+    Decide which runner to use.
+    Returns dict:
+      {"mode": "bin"|"py",
+       "exe": <absolute path to binary or python>,
+       "script": <path to run_inference.py or None>,
+       "why": <text>}
+    """
+    # 1) Try C++ binary if user passed an absolute path or it's on PATH
+    if bitnet_bin:
+        if os.path.isabs(bitnet_bin) and os.path.isfile(bitnet_bin):
+            return {"mode": "bin", "exe": bitnet_bin, "script": None, "why": "absolute bitnet binary"}
+        found = shutil.which(bitnet_bin)
+        if found:
+            return {"mode": "bin", "exe": found, "script": None, "why": f"found on PATH ({found})"}
+
+    # 2) Fallback to Python runner if present
+    py_script = _default_py_runner()
+    if py_script:
+        # Prefer current interpreter for best venv compatibility
+        py_exe = os.environ.get("PYTHON") or sys.executable or shutil.which("python3") or "python3"
+        return {"mode": "py", "exe": py_exe, "script": py_script, "why": f"python runner at {py_script}"}
+
+    # 3) Nothing found
+    path_str = os.environ.get("PATH", "")
+    raise FileNotFoundError(
+        "bitnet.cpp runner not found.\n"
+        f"- Tried C++ binary name: '{bitnet_bin or 'bitnet'}' (PATH={path_str})\n"
+        f"- Also looked for Python runner at: {_default_py_runner() or '<not found>'}\n"
+        "Fix:\n"
+        "  • Build the C++ binary and pass --bitnet-bin /abs/path/to/bitnet, OR\n"
+        "  • git clone https://github.com/microsoft/BitNet under your project root so BitNet/run_inference.py exists, "
+        "then ensure 'pip install -r BitNet/requirements.txt' in your venv."
+    )
+
+# ------- Process spawner -------
+
+def _spawn_process(
+    runner: dict,
     model_path: str,
     prompt: str,
     max_new_tokens: int,
@@ -98,18 +149,39 @@ def _spawn_bitnet(
     if threads is None:
         threads = os.cpu_count() or 4
 
-    cmd = [
-        bitnet_bin,
-        "-m", model_path,
-        "-p", prompt,
-        "-n", str(max_new_tokens),
-        "-t", str(threads),
-        "-c", str(ctx),
-        "--temp", str(temperature),
-        "--top-p", str(top_p),
-    ]
-    if extra_args:
-        cmd.extend(extra_args)
+    mode = runner["mode"]
+    exe  = runner["exe"]
+
+    if mode == "bin":
+        # C++ CLI flags
+        cmd = [
+            exe,
+            "-m", model_path,
+            "-p", prompt,
+            "-n", str(max_new_tokens),
+            "-t", str(threads),
+            "-c", str(ctx),
+            "--temp", str(temperature),
+            "--top-p", str(top_p),
+        ]
+        if extra_args:
+            cmd.extend(extra_args)
+
+    else:
+        # Python runner flags (per README: -m, -n, -p, -t, -c, -temp; add -cnv to enable chat-ish mode)
+        script = runner["script"]
+        cmd = [
+            exe, "-u", script,
+            "-m", model_path,
+            "-n", str(max_new_tokens),
+            "-p", prompt,
+            "-t", str(threads),
+            "-c", str(ctx),
+            "-temp", str(temperature),
+            "-cnv",
+        ]
+        if extra_args:
+            cmd.extend(extra_args)
 
     try:
         proc = subprocess.Popen(
@@ -117,13 +189,14 @@ def _spawn_bitnet(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1,          # line-buffered (best we can do portably)
+            bufsize=1,          # line-buffered
             universal_newlines=True,
         )
     except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"bitnet.cpp binary not found: {bitnet_bin}\n"
-            f"Command tried: {' '.join(shlex.quote(x) for x in cmd)}"
+            f"Failed to spawn runner ({runner['why']}):\n"
+            f"Command tried: {' '.join(shlex.quote(x) for x in cmd)}\n"
+            f"PATH was: {os.environ.get('PATH','')}"
         ) from e
 
     return proc
@@ -133,7 +206,7 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
     Yield raw text as it arrives from stdout. We suppress everything until `wait_for_tag`
     is seen in the accumulated buffer so echoed prompt doesn't leak.
 
-    If the binary NEVER echoes the tag, we fall back to yielding the whole stdout buffer.
+    If the process NEVER echoes the tag, we fall back to yielding the whole stdout buffer.
     """
     if not proc.stdout:
         return
@@ -161,11 +234,13 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
     if proc.returncode not in (0, None):
         if proc.stderr:
             err = proc.stderr.read()
-            raise RuntimeError(f"bitnet.cpp exited with {proc.returncode}:\n{err}")
+            raise RuntimeError(f"Runner exited with {proc.returncode}:\n{err}")
 
     # Fallback: if the runner didn't echo the tag at all, yield everything we saw.
     if not saw_tag and buf_all:
         yield buf_all
+
+# ------- Public API -------
 
 def stream_chat(
     messages: List[Dict[str, str]],
@@ -194,14 +269,17 @@ def stream_chat(
     model_path = find_gguf_model(bitnet_model)
     if not model_path:
         raise FileNotFoundError(
-            "No GGUF model found. Provide bitnet_model or place one in "
+            "No GGUF model found. Provide --bitnet-model or place one in "
             f"{default_gguf_dir()}"
         )
 
+    # Resolve runner (C++ binary or Python script)
+    runner = _resolve_runner(bitnet_bin)
+
     # Build prompt & launch
     prompt = build_chat_prompt(system_msg, user_msg)
-    proc = _spawn_bitnet(
-        bitnet_bin=bitnet_bin,
+    proc = _spawn_process(
+        runner=runner,
         model_path=model_path,
         prompt=prompt,
         max_new_tokens=max_new_tokens,
@@ -218,16 +296,16 @@ def stream_chat(
         accum += ch
         clean = strip_ansi(accum)
 
-        # Find the *last* full sentence end in the current buffer
-        matches = list(SENTENCE_RE.finditer(clean))
-        if matches:
-            end_idx = matches[-1].end()
-            sentence_block = clean[:end_idx]
-            remainder = clean[end_idx:]
-            # Reset accum to only remainder
-            accum = remainder
-            # Yield trimmed block (may contain 1+ sentences)
-            yield sentence_block
+        # Emit every complete sentence currently available, individually
+        start = 0
+        for m in SENTENCE_RE.finditer(clean):
+            end_idx = m.end()
+            sentence = clean[start:end_idx]
+            yield sentence
+            start = end_idx
+
+        # Keep only the unfinished tail
+        accum = clean[start:]
 
     # Yield leftover tail (if any)
     tail = strip_ansi(accum).strip()
