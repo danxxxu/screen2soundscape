@@ -16,18 +16,18 @@ os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
-from backend.utils.bitnet_singleton import stream_chat  # general chat (BitNet)
+from backend.utils.bitnet_singleton import stream_chat
 from backend.utils.transcribe import record_and_transcribe
 from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 
 # ---- OSM utils ----
 from backend.utils.osm_tags import find_osm_tags
 from backend.utils.question_to_overpass import parse_question, build_overpass_query
-from backend.utils.overpass_to_osm import (  # <-- use your BitNet-powered module
+from backend.utils.overpass_to_osm_bitnet import (
     run_overpass_query,
     summarize_results,
     summarize_route,
-    generate_overpass_query,               # <-- we’ll use as fallback only when appropriate
+    generate_overpass_query,
 )
 from deep_translator import GoogleTranslator
 import requests
