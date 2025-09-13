@@ -118,6 +118,10 @@ def _resolve_runner(bitnet_bin: str) -> dict:
        "script": <path or None>,
        "why": <text>}
     """
+
+    if os.environ.get("BITNET_FORCE_HF") == "1":
+      return {"mode": "hf", "exe": None, "script": None, "why": "env forced HF"}
+
     # 1) C++ binary (absolute or on PATH)
     if bitnet_bin:
         if os.path.isabs(bitnet_bin) and os.path.isfile(bitnet_bin):
