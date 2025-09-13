@@ -9,24 +9,25 @@ import logging
 import datetime
 import pathlib
 
+# Quiet some libs
 os.environ["TORCH_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
-from backend.utils.bitnet_singleton import stream_chat
+from backend.utils.bitnet_singleton import stream_chat  # general chat (BitNet)
 from backend.utils.transcribe import record_and_transcribe
 from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 
-# ---- OSM utils (your existing modules) ----
+# ---- OSM utils ----
 from backend.utils.osm_tags import find_osm_tags
 from backend.utils.question_to_overpass import parse_question, build_overpass_query
-from backend.utils.overpass_to_osm_bitnet import (
+from backend.utils.overpass_to_osm import (  # <-- use your BitNet-powered module
     run_overpass_query,
     summarize_results,
     summarize_route,
-    generate_overpass_query,
+    generate_overpass_query,               # <-- we’ll use as fallback only when appropriate
 )
 from deep_translator import GoogleTranslator
 import requests
@@ -99,33 +100,47 @@ def _to_english(text: str) -> str:
 
 
 def is_osm_query(question: str) -> bool:
+    """
+    Be stricter to avoid misrouting generic questions:
+    - DO NOT count a default/fallback center alone as OSM intent.
+    - Require tags/bbox OR an explicit routing mode OR explicit start+end coords,
+      OR nearby/route keywords / explicit coords in the text.
+    """
     q_orig = (question or "").strip()
     q_en = _to_english(q_orig).lower()
     score = 0
+
+    # 1) Deterministic tag hits (original or translated)
     try:
         if find_osm_tags(q_orig) or find_osm_tags(q_en):
             score += 2
     except Exception:
         pass
+
+    # 2) Structured parse signals — exclude "center" alone
     try:
         params = parse_question(q_orig)
         strong = any(
             [
-                bool(params.get("mode")),
-                bool(params.get("center")),
-                bool(params.get("bbox")),
                 bool(params.get("tags")),
-                bool(params.get("start_coords")) and bool(params.get("end_coords")),
+                bool(params.get("bbox")),
+                params.get("mode") in ("route_check", "route_via"),
+                (bool(params.get("start_coords")) and bool(params.get("end_coords"))),
             ]
         )
         if strong:
             score += 2
     except Exception:
         pass
+
+    # 3) Nearby / routing semantics (after MT)
     if re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en):
         score += 1
+
+    # 4) Explicit coordinates or OSM-ish terms (after MT)
     if _COORDS_RE.search(q_en) or re.search(_OSM_TERMS_EN, q_en):
         score += 1
+
     return score >= 2
 
 
@@ -210,9 +225,18 @@ def run_general(
         return ""
 
 
-def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None):
-    # (BitNet warmup happens lazily in overpass_to_osm when first used)
+def _looks_invalid_overpass(q: str) -> bool:
+    if not q or not q.strip():
+        return True
+    # Common failure patterns from bad parsers
+    if "area:None" in q or "(area:None)" in q:
+        return True
+    if re.search(r"\bNone\b", q):
+        return True
+    return False
 
+
+def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None):
     # Parse → (optional) route → Overpass → Summarize → Translate → TTS
     params = parse_question(question, lat=lat, lon=lon)
 
@@ -226,34 +250,62 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
         except Exception as e:
             print(f"⚠️ Routing failed: {e}")
 
-    # Build Overpass QL (deterministic builder → BitNet fallback)
+    # Build Overpass QL (deterministic builder → BitNet fallback if it STILL looks like a map query)
     overpass_query = ""
     try:
         overpass_query = build_overpass_query(params)
     except Exception as e:
         print(f"⚠️ build_overpass_query failed: {e}")
 
-    if not overpass_query or not overpass_query.strip():
-        # Fallback to BitNet generator
-        clat, clon = None, None
-        if params.get("center"):
-            clat, clon = params["center"]
-        elif lat is not None and lon is not None:
-            clat, clon = (lat, lon)
-        try:
-            overpass_query = generate_overpass_query(
-                question, lat=clat, lon=clon, radius=params.get("radius", 2000)
+    if _looks_invalid_overpass(overpass_query):
+        # Only try BitNet QL if the text actually looks like a map request
+        text_has_osm_intent = (
+            bool(find_osm_tags(question) or find_osm_tags(_to_english(question)))
+            or bool(re.search(_NEARBY_WORDS_EN, _to_english(question)))
+            or bool(_COORDS_RE.search(_to_english(question)))
+        )
+        if text_has_osm_intent:
+            clat, clon = None, None
+            if params.get("center"):
+                clat, clon = params["center"]
+            elif lat is not None and lon is not None:
+                clat, clon = (lat, lon)
+            try:
+                overpass_query = generate_overpass_query(
+                    question, lat=clat, lon=clon, radius=params.get("radius", 2000)
+                )
+                print("🧭 Overpass query (BitNet fallback):")
+            except Exception as e:
+                msg = f"❌ Failed to generate Overpass query: {e}"
+                print(msg)
+                # Speak & return a friendly message instead of crashing
+                model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+                speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
+                return msg
+        else:
+            msg = (
+                "This doesn’t look like a map request. "
+                "Try again with --force-mode general for a regular answer."
             )
-            print("🧭 Overpass query (BitNet fallback):")
-        except Exception as e:
-            return f"❌ Failed to generate Overpass query: {e}"
+            print(msg)
+            model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+            speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
+            return msg
     else:
         print("🧭 Overpass query (deterministic):")
 
     print(overpass_query)
 
-    # Run Overpass
-    results = run_overpass_query(overpass_query)
+    # Run Overpass safely
+    try:
+        results = run_overpass_query(overpass_query)
+    except Exception as e:
+        msg = f"Sorry, I couldn't run the map search ({e})."
+        print(msg)
+        model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+        speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
+        return msg
+
     print(f"✅ Overpass returned {len(results.get('elements', []))} element(s).")
 
     # Summarize (English)
@@ -285,13 +337,13 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
 # ---------- Main unified runner ----------
 def main(
     speaker,
-    language,
+    language,  # "auto" → detect from question
     speed,
     text,
     text_file,
-    output_mode,
-    force_mode,
-    save_txt,
+    output_mode,  # "stream" (general) or "file"/"stream" (OSM)
+    force_mode,  # "auto" | "osm" | "general"
+    save_txt,  # save Q&A to saved_questions/<timestamp>.txt
     system_prompt,
     max_new_tokens,
     temperature,
@@ -305,152 +357,4 @@ def main(
     lon,
 ):
     print("🕒 Step 1: Getting question...")
-    t1 = time.time()
-    question = get_question(text=text, text_file=text_file)
-    t2 = time.time()
-    print(f"✅ Got question: {question}")
-    print(f"⏱️ Step 1 duration: {t2 - t1:.2f} s\n")
-
-    if (language is None) or (str(language).strip().lower() == "auto"):
-        language = detect_language(question)
-    print(f"🌐 Using language: {language}")
-
-    chosen = force_mode.lower()
-    if chosen == "auto":
-        chosen = "osm" if is_osm_query(question) else "general"
-    print(f"🧭 Routed to: {chosen.upper()}")
-
-    t3 = time.time()
-    if chosen == "osm":
-        out = run_osm(
-            question=question,
-            language=language,
-            speaker=speaker,
-            speed=speed,
-            output_mode=output_mode,
-            lat=lat,
-            lon=lon,
-        )
-    else:
-        out = run_general(
-            question=question,
-            language=language,
-            speaker=speaker,
-            speed=speed,
-            output_mode=output_mode,
-            system_prompt=system_prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            ctx=ctx,
-            threads=threads,
-            bitnet_bin=bitnet_bin,
-            bitnet_model=bitnet_model,
-            extra_args=extra_args,
-        )
-    t4 = time.time()
-    print(f"\n🎉 Completed in {t4 - t1:.2f} s (handler: {t4 - t3:.2f} s).")
-
-    if save_txt:
-        try:
-            ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-            outdir = pathlib.Path("saved_questions")
-            outdir.mkdir(parents=True, exist_ok=True)
-            path = outdir / f"{ts}.txt"
-            with open(path, "w", encoding="utf-8") as f:
-                f.write("Question:\n")
-                f.write((question or "").strip() + "\n\n")
-                f.write("Answer:\n")
-                f.write((out or "").strip() + "\n")
-            print(f"📝 Saved Q&A to {path.as_posix()}")
-        except Exception as e:
-            print(f"⚠️ Failed to save Q&A: {e}")
-
-    return out
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Unified assistant: auto-routes between general chat and OSM, saves Q&A to txt."
-    )
-    parser.add_argument("--speaker", type=str, default="amy", help="Piper speaker name")
-    parser.add_argument("--language", type=str, default="auto", help="TTS language code (or 'auto')")
-    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
-    parser.add_argument("--text", type=str, help="Provide a question as text input instead of recording")
-    parser.add_argument("--text-file", type=str, help="Provide a question via a text file instead of recording")
-    parser.add_argument(
-        "--output-mode",
-        type=str,
-        choices=["file", "stream"],
-        default="stream",
-        help="General chat streams by default; OSM respects your choice here.",
-    )
-    parser.add_argument(
-        "--force-mode",
-        type=str,
-        choices=["auto", "osm", "general"],
-        default="auto",
-        help="Force routing (useful for debugging).",
-    )
-    parser.add_argument(
-        "--save-txt",
-        dest="save_txt",
-        action="store_true",
-        help="Save the question and answer to saved_questions/<timestamp>.txt (default: on)",
-    )
-    parser.add_argument(
-        "--no-save-txt",
-        dest="save_txt",
-        action="store_false",
-        help="Disable saving the question/answer text file",
-    )
-    parser.set_defaults(save_txt=True)
-
-    # BitNet / general
-    parser.add_argument(
-        "--system-prompt",
-        type=str,
-        default="You are a helpful AI assistant for everyday tasks, please always respond in the same language as the question",
-        help="System instruction to steer responses.",
-    )
-    parser.add_argument("--max-new-tokens", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=0.7)
-    parser.add_argument("--top-p", type=float, default=0.95)
-    parser.add_argument("--ctx", type=int, default=4096)
-    parser.add_argument("--threads", type=int, default=None, help="CPU threads (default: os.cpu_count())")
-    parser.add_argument("--bitnet-bin", type=str, default="bitnet", help="Path to the bitnet.cpp binary")
-    parser.add_argument(
-        "--bitnet-model",
-        type=str,
-        default="~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/ggml-model-q4_0.gguf",
-        help="Path to a .gguf file or a directory containing GGUF files.",
-    )
-    parser.add_argument("--extra-args", type=str, nargs="*", default=None, help="Extra args passed to bitnet.cpp")
-
-    # Optional geohints for OSM
-    parser.add_argument("--lat", type=float, help="Latitude of the current user location")
-    parser.add_argument("--lon", type=float, help="Longitude of the current user location")
-
-    args = parser.parse_args()
-
-    main(
-        speaker=args.speaker,
-        language=args.language,
-        speed=args.speed,
-        text=args.text,
-        text_file=args.text_file,
-        output_mode=args.output_mode,
-        force_mode=args.force_mode,
-        save_txt=args.save_txt,
-        system_prompt=args.system_prompt,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        ctx=args.ctx,
-        threads=args.threads,
-        bitnet_bin=args.bitnet_bin,
-        bitnet_model=args.bitnet_model,
-        extra_args=args.extra_args,
-        lat=args.lat,
-        lon=args.lon,
-    )
+    t1 = time.time
