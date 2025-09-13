@@ -11,10 +11,9 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
-
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
-from backend.utils.bitnet_singleton import stream_chat, chat  # <-- bitnet.cpp backend
+from backend.utils.bitnet_singleton import stream_chat, chat  # bitnet.cpp backend
 from backend.utils.transcribe import record_and_transcribe
 from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 
@@ -35,11 +34,10 @@ def detect_language(text: str) -> str:
         DetectorFactory.seed = 0
         code = detect(text)
     except Exception:
-        # Heuristics by script
         s = text
         if any("\u3040" <= ch <= "\u30ff" or "\u31f0" <= ch <= "\u31ff" for ch in s):  # Hiragana/Katakana
             return "ja"
-        if any("\u4e00" <= ch <= "\u9fff" for ch in s):  # CJK Unified Ideographs (likely zh)
+        if any("\u4e00" <= ch <= "\u9fff" for ch in s):  # CJK (likely zh)
             return "zh"
         if any("\uac00" <= ch <= "\ud7af" for ch in s):  # Hangul
             return "ko"
@@ -114,7 +112,7 @@ def main(
     # Prepare TTS model path once
     model_path_tts = find_best_piper_model(MODEL_DIR, language, speaker)
 
-    # Step 2: Ask BitNet (streaming)
+    # Step 2: Ask BitNet (streaming via bitnet.cpp)
     print("🕒 Step 2: Asking BitNet (streaming via bitnet.cpp)...")
     t3 = time.time()
     messages = [
@@ -124,10 +122,7 @@ def main(
 
     collected = []
 
-    # Speed influences streaming chunk cadence in bitnet_singleton.stream_chat:
-    #   - <=1.0: sentence-level
-    #   - 1.0~1.5: phrase-level (commas etc.) if long enough
-    #   - >=1.5: aggressive phrase-level / long-run flushes
+    # NOTE: `speed` controls only Piper playback (length_scale), not chunking.
     try:
         gen = stream_chat(
             messages,
@@ -139,8 +134,6 @@ def main(
             bitnet_bin=bitnet_bin,
             bitnet_model=bitnet_model,
             extra_args=extra_args,
-            speed=speed,                 # <-- speed-aware chunking
-            min_phrase_chars=100,        # tune if you want larger/smaller chunks
         )
 
         if output_mode == "stream":
@@ -149,7 +142,7 @@ def main(
                 # Show user immediately
                 print(chunk, end="", flush=True)
                 collected.append(chunk)
-                # Speak this chunk now
+                # Speak this chunk now (speed affects playback rate)
                 speak(
                     chunk,
                     language=language,
@@ -183,7 +176,7 @@ def main(
                 response_text,
                 language=language,
                 speaker_key=model_path_tts,
-                speed=speed,
+                speed=speed,            # playback rate
                 output_mode="file"
             )
         except Exception as e:
@@ -202,7 +195,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the general-purpose voice assistant (BitNet via bitnet.cpp, streaming).")
     parser.add_argument("--speaker", type=str, default="amy", help="Speaker name (matches speaker folder)")
     parser.add_argument("--language", type=str, default="auto", help="TTS language code (or 'auto' to detect from input)")
-    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier (also influences chunk size)")
+    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier (affects TTS playback only)")
     parser.add_argument("--text", type=str, help="Provide a question as text input instead of recording")
     parser.add_argument("--text-file", type=str, help="Provide a question via a text file instead of recording")
     parser.add_argument("--output-mode", type=str, choices=["file", "stream"], default="stream",
