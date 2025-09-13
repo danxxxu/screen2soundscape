@@ -24,7 +24,6 @@ import requests
 from requests.exceptions import HTTPError
 
 from backend.utils.osm_tags import TAG_MAP, find_osm_tags
-from backend.utils.llama_singleton import get_llm
 from backend.utils.bitnet_singleton import chat as bitnet_chat
 
 _llm = get_llm()  # only used for generating the Overpass QL itself
