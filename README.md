@@ -126,42 +126,95 @@ See the official guide here:
 
 
 
-## 🧠 LLaMA (for the general assistant)
+## 🧠 BitNet b1.58 2B4T (for the general assistant)
 
-The **general assistant** (`run_assistant_general.py`) relies on a local LLaMA model for question-answering.  
-For this demo we use the quantized **Llama-2-7B-Chat Q4_K_M** model, which balances speed and accuracy.
+The general assistant (`run_assistant_general.py`) uses **Microsoft’s BitNet b1.58 2B4T**.
+We load the model from a **local folder** if present, falling back to Hugging Face if not.
 
-### Download the model
+> ⚠️ For true 1-bit efficiency gains (speed/energy), Microsoft recommends **bitnet.cpp**.
+> This project currently uses the **Transformers** path for simplicity and easy integration.
+
+### 1) Install runtime dependencies
 
 ```bash
-# Create a models directory (if not already present)
-mkdir -p ~/screen2soundscape/backend/models
+# Transformers fork required by BitNet
+pip install "git+https://github.com/huggingface/transformers.git@096f25ae1f501a084d8ff2dcaf25fbc2bd60eba4"
 
-# Download the 7B chat model in Q4_K_M format (~4 GB)
-wget -O ~/screen2soundscape/backend/models/llama-2-7b-chat.Q4_K_M.gguf \
-  https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf
-````
+# Usual runtime bits
+pip install torch accelerate
 
-This will place the model file in:
-
-```
-~/screen2soundscape/backend/models/llama-2-7b-chat.Q4_K_M.gguf
+# (Optional) Tools to download models
+pip install "huggingface_hub[cli]"
+# or: sudo apt-get install git-lfs && git lfs install
 ```
 
-### Other LLaMA variants
+### 2) Download the BitNet model locally
 
-* More quantizations (Q2, Q4, Q5, Q8, etc.) are available from the same Hugging Face repo.
-  Higher quantization (`Q8`) = better accuracy, but uses more RAM.
-  Lower quantization (`Q2`) = faster and smaller, but less accurate.
+Create the model directory and download the **microsoft/bitnet-b1.58-2B-4T** weights into it.
 
-Browse them all here:
-👉 [TheBloke/Llama-2-7B-Chat-GGUF on Hugging Face](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF)
+**Option A — using `huggingface-cli` (recommended):**
 
-### Tips
+```bash
+# Create the models directory
+mkdir -p ~/screen2soundscape/backend/models/microsoft
 
-* Make sure the filename in your `get_llm()` config points to the correct `.gguf` file.
-* If your machine has limited RAM/VRAM (e.g. 8 GB or less), stick with **Q4\_K\_M** or lighter.
-* For larger context windows or higher accuracy, you can try **13B** or **70B** versions (but they require much more memory).
+# Download the full model repo into the expected local path
+huggingface-cli download microsoft/bitnet-b1.58-2B-4T \
+  --repo-type model \
+  --local-dir ~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T
+```
+
+**Option B — using Git LFS:**
+
+```bash
+mkdir -p ~/screen2soundscape/backend/models/microsoft
+cd ~/screen2soundscape/backend/models/microsoft
+
+# If needed:
+# sudo apt-get install git-lfs
+git lfs install
+
+# Clone the repo (creates ./bitnet-b1.58-2B-4T)
+git clone https://huggingface.co/microsoft/bitnet-b1.58-2B-4T
+```
+
+After this step, your files will be under:
+
+```
+~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T
+```
+
+Our code auto-detects this local folder; if it’s missing, it will fetch by model ID (`microsoft/bitnet-b1.58-2B-4T`) from Hugging Face.
+
+### 3) GGUF for `bitnet.cpp`
+
+Use the native 1-bit speedups via **bitnet.cpp**:
+
+```bash
+# Download GGUF weights (used by bitnet.cpp)
+huggingface-cli download microsoft/bitnet-b1.58-2B-4T-gguf \
+  --repo-type model \
+  --local-dir ~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T-gguf
+```
+
+
+### 4) Default system instruction
+
+The assistant uses this default system prompt (overridable via `--system-prompt`):
+
+> **“You are a helpful AI assistant for everyday tasks, please always respond in the same language as the question.”**
+
+---
+
+**Example run:**
+
+```bash
+python -m backend.run_assistant_general \
+  --speaker amy \
+  --text "Where are the top 10 tallest mountains" \
+  --output-mode file
+```
+
 
 
 **FLAN (for OSM summaries)**

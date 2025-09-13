@@ -1,7 +1,7 @@
-# run_assistant.py
+# backend/run_assistant.py
 import os
 
-os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"  # Must be first, before importing torch
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 # Suppress TensorFlow logs
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"      # 0=all logs, 1=filter INFO, 2=filter WARNING, 3=only errors
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"     # Disable oneDNN messages
@@ -39,13 +39,6 @@ from backend.utils.overpass_to_osm_flan import (
     summarize_route,
     warmup_summariser
 )
-
-# from utils.overpass_to_osm_llama import (
-#     run_overpass_query,
-#     summarize_results,
-#     summarize_route
-# )
-
 
 warmup_summariser() 
 

@@ -1,17 +1,15 @@
 # backend/utils/bitnet_singleton.py
 """
-bitnet.cpp-backed chat wrapper with speed-aware, sentence/phrase-level streaming.
+bitnet.cpp-backed chat wrapper with sentence-level streaming.
 
-Public API:
-  - chat(messages, ...) -> str                     # blocking full text
-  - stream_chat(messages, ..., speed=1.0) -> iter  # yields chunks as they complete
-
-Notes
------
 - Prefers a local GGUF in: backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/
-- Falls back to a model path passed in `bitnet_model`.
-- We stream characters from the subprocess and flush at sentence boundaries by default.
-- If speed > 1.0, we flush at *phrase* boundaries (commas/semicolons/colons) sooner.
+- Falls back to a model path provided via `bitnet_model` args.
+- Uses a simple System/User/Assistant prompt. We stream stdout from the process,
+  wait until we detect the "Assistant:" sentinel, then yield sentences as they complete.
+
+Expose two public entry points:
+  - chat(messages, ...) -> str              # full, blocking
+  - stream_chat(messages, ...) -> iterator  # yields sentences as they complete
 """
 
 import os
@@ -19,7 +17,8 @@ import re
 import glob
 import shlex
 import subprocess
-from typing import Iterable, Iterator, List, Dict, Optional, Tuple
+from typing import Iterable, Iterator, List, Dict, Optional
+
 
 # ------- Paths / discovery -------
 
@@ -79,8 +78,10 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")        # sentence terminators
 PHRASE_RE   = re.compile(r"(?<=[\.\!\?]|[,;:])\s+")             # sentence OR phrase (comma/colon/semicolon)
 
+
 def strip_ansi(s: str) -> str:
     return ANSI_RE.sub("", s)
+
 
 def _spawn_bitnet(
     bitnet_bin: str,
@@ -140,6 +141,7 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
     buf_all = ""
     saw_tag = False
 
+    # Read character-by-character to minimize latency
     while True:
         ch = proc.stdout.read(1)
         if ch == "" or ch is None:  # EOF
@@ -150,14 +152,16 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
             if wait_for_tag in buf_all:
                 saw_tag = True
             continue
-
+        # After we see the tag, yield the *new* char only
         yield ch
 
+    # Drain stderr on exit for debugging if needed
     proc.wait()
     if proc.returncode not in (0, None):
         if proc.stderr:
             err = proc.stderr.read()
             raise RuntimeError(f"bitnet.cpp exited with {proc.returncode}:\n{err}")
+
 
 def _pop_chunks(clean: str, speed: float, min_phrase_chars: int) -> Tuple[List[str], str]:
     """
@@ -217,15 +221,11 @@ def stream_chat(
     threads: Optional[int] = None,
     ctx: int = 4096,
     extra_args: Optional[List[str]] = None,
-    # streaming behavior
-    speed: float = 1.0,
-    min_phrase_chars: int = 100,
 ) -> Iterator[str]:
     """
-    Stream chunks as they complete.
-    - Default: sentence-level.
-    - speed>1.0 => permit phrase-level flushing (commas/colons/semicolons).
-    - speed>=1.5 => more aggressive; also flush long runs even without punctuation.
+    Stream sentences as they complete (naive segmenter). Yields strings that end in . ! or ? (mostly).
+
+    messages: [{"role":"system","content":"..."}, {"role":"user","content":"..."}]
     """
     # Extract content
     system_msg = next((m["content"] for m in messages if m.get("role") == "system"), "")
@@ -253,17 +253,22 @@ def stream_chat(
         extra_args=extra_args,
     )
 
-    # Accumulate chars into flushable chunks
+    # Accumulate chars into sentences
     accum = ""
     for ch in _iter_model_text(proc, wait_for_tag=ASSISTANT_TAG):
         accum += ch
         clean = strip_ansi(accum)
 
-        chunks, remainder = _pop_chunks(clean, speed=speed, min_phrase_chars=min_phrase_chars)
-        if chunks:
+        # Find the last full sentence end
+        m = SENTENCE_RE.search(clean)
+        if m:
+            end_idx = m.end()
+            sentence = clean[:end_idx]
+            remainder = clean[end_idx:]
+            # Reset accum to only remainder *including any partial ansi codes stripped already*
             accum = remainder
-            for c in chunks:
-                yield c
+            # Yield trimmed sentence
+            yield sentence
 
     # Yield leftover tail (if any)
     tail = strip_ansi(accum).strip()
@@ -281,10 +286,7 @@ def chat(
     threads: Optional[int] = None,
     ctx: int = 4096,
     extra_args: Optional[List[str]] = None,
-    speed: float = 1.0,
-    min_phrase_chars: int = 100,
 ) -> str:
-    """Blocking convenience wrapper that joins the streamed chunks into one string."""
     parts = []
     for sent in stream_chat(
         messages,

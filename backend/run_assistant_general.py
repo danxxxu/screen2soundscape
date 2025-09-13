@@ -11,6 +11,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
+
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 from backend.utils.bitnet_singleton import stream_chat, chat  # <-- bitnet.cpp backend
