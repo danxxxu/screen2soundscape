@@ -210,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument("--ctx", type=int, default=4096)
     parser.add_argument("--threads", type=int, default=None, help="CPU threads (default: os.cpu_count())")
     parser.add_argument("--bitnet-bin", type=str, default="bitnet", help="Path to the bitnet.cpp binary")
-    parser.add_argument("--bitnet-model", type=str, default=None,
+    parser.add_argument("--bitnet-model", type=str, default="~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/ggml-model-q4_0.gguf",
                         help="Path to a .gguf file or a directory containing GGUF files. "
                              "Default: backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/")
     parser.add_argument("--extra-args", type=str, nargs="*", default=None,
