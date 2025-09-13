@@ -7,7 +7,7 @@ bitnet.cpp-backed chat wrapper with sentence-level streaming.
 - Uses a simple System/User/Assistant prompt. We stream stdout from the process,
   wait until we detect the "Assistant:" sentinel, then yield sentences as they complete.
 
-Expose two public entry points:
+Public API:
   - chat(messages, ...) -> str              # full, blocking
   - stream_chat(messages, ...) -> iterator  # yields sentences as they complete
 """
@@ -17,7 +17,7 @@ import re
 import glob
 import shlex
 import subprocess
-from typing import Iterable, Iterator, List, Dict, Optional
+from typing import Iterable, Iterator, List, Dict, Optional, Tuple  # <- Tuple imported
 
 # ------- Paths / discovery -------
 
@@ -78,7 +78,8 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 def strip_ansi(s: str) -> str:
     return ANSI_RE.sub("", s)
 
-SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")  # simple heuristic; avoids some abbrev false-positives
+# Avoids some abbrev false-positives; flush on sentence terminators.
+SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")
 
 def _spawn_bitnet(
     bitnet_bin: str,
@@ -131,6 +132,8 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
     """
     Yield raw text as it arrives from stdout. We suppress everything until `wait_for_tag`
     is seen in the accumulated buffer so echoed prompt doesn't leak.
+
+    If the binary NEVER echoes the tag, we fall back to yielding the whole stdout buffer.
     """
     if not proc.stdout:
         return
@@ -153,12 +156,16 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
         # After we see the tag, yield the *new* char only
         yield ch
 
-    # Drain stderr on exit for debugging if needed
+    # Process exit
     proc.wait()
     if proc.returncode not in (0, None):
         if proc.stderr:
             err = proc.stderr.read()
             raise RuntimeError(f"bitnet.cpp exited with {proc.returncode}:\n{err}")
+
+    # Fallback: if the runner didn't echo the tag at all, yield everything we saw.
+    if not saw_tag and buf_all:
+        yield buf_all
 
 def stream_chat(
     messages: List[Dict[str, str]],
@@ -211,16 +218,16 @@ def stream_chat(
         accum += ch
         clean = strip_ansi(accum)
 
-        # Find the last full sentence end
-        m = SENTENCE_RE.search(clean)
-        if m:
-            end_idx = m.end()
-            sentence = clean[:end_idx]
+        # Find the *last* full sentence end in the current buffer
+        matches = list(SENTENCE_RE.finditer(clean))
+        if matches:
+            end_idx = matches[-1].end()
+            sentence_block = clean[:end_idx]
             remainder = clean[end_idx:]
-            # Reset accum to only remainder *including any partial ansi codes stripped already*
+            # Reset accum to only remainder
             accum = remainder
-            # Yield trimmed sentence
-            yield sentence
+            # Yield trimmed block (may contain 1+ sentences)
+            yield sentence_block
 
     # Yield leftover tail (if any)
     tail = strip_ansi(accum).strip()
