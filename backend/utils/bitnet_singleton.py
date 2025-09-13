@@ -7,7 +7,7 @@ bitnet.cpp-backed chat wrapper with sentence-level streaming.
 - Uses a simple System/User/Assistant prompt. We stream stdout from the process,
   wait until we detect the "Assistant:" sentinel, then yield sentences as they complete.
 
-Expose two public entry points:
+Public API:
   - chat(messages, ...) -> str              # full, blocking
   - stream_chat(messages, ...) -> iterator  # yields sentences as they complete
 """
@@ -17,8 +17,7 @@ import re
 import glob
 import shlex
 import subprocess
-from typing import Iterable, Iterator, List, Dict, Optional
-
+from typing import Iterable, Iterator, List, Dict, Optional, Tuple  # <- Tuple imported
 
 # ------- Paths / discovery -------
 
@@ -75,13 +74,12 @@ def build_chat_prompt(system_prompt: str, user_prompt: str) -> str:
 # ------- Streaming process glue -------
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")        # sentence terminators
-PHRASE_RE   = re.compile(r"(?<=[\.\!\?]|[,;:])\s+")             # sentence OR phrase (comma/colon/semicolon)
-
 
 def strip_ansi(s: str) -> str:
     return ANSI_RE.sub("", s)
 
+# Avoids some abbrev false-positives; flush on sentence terminators.
+SENTENCE_RE = re.compile(r"(?<!\b[A-Z])[.!?]+(?=\s|\Z)")
 
 def _spawn_bitnet(
     bitnet_bin: str,
@@ -119,7 +117,7 @@ def _spawn_bitnet(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1,          # line-buffered
+            bufsize=1,          # line-buffered (best we can do portably)
             universal_newlines=True,
         )
     except FileNotFoundError as e:
@@ -134,6 +132,8 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
     """
     Yield raw text as it arrives from stdout. We suppress everything until `wait_for_tag`
     is seen in the accumulated buffer so echoed prompt doesn't leak.
+
+    If the binary NEVER echoes the tag, we fall back to yielding the whole stdout buffer.
     """
     if not proc.stdout:
         return
@@ -152,61 +152,20 @@ def _iter_model_text(proc: subprocess.Popen, wait_for_tag: str) -> Iterator[str]
             if wait_for_tag in buf_all:
                 saw_tag = True
             continue
+
         # After we see the tag, yield the *new* char only
         yield ch
 
-    # Drain stderr on exit for debugging if needed
+    # Process exit
     proc.wait()
     if proc.returncode not in (0, None):
         if proc.stderr:
             err = proc.stderr.read()
             raise RuntimeError(f"bitnet.cpp exited with {proc.returncode}:\n{err}")
 
-
-def _pop_chunks(clean: str, speed: float, min_phrase_chars: int) -> Tuple[List[str], str]:
-    """
-    Decide how much to flush based on speed:
-      - speed <= 1.0: sentence-level
-      - 1.0 < speed < 1.5: phrase-level (commas etc.) if long enough, else wait for sentence
-      - speed >= 1.5: phrase-level aggressively; if chunk is long (>= min_phrase_chars), flush anyway
-    Returns (chunks, remainder).
-    """
-    chunks: List[str] = []
-
-    # Always prefer full sentences if present
-    s_matches = list(SENTENCE_RE.finditer(clean))
-    if s_matches:
-        last_end = s_matches[-1].end()
-        chunks.append(clean[:last_end])
-        return chunks, clean[last_end:]
-
-    # If speed <= 1, don't flush on phrases
-    if speed <= 1.0:
-        return chunks, clean
-
-    # Phrase-level boundaries
-    p_matches = list(PHRASE_RE.finditer(clean))
-    if p_matches:
-        last_end = p_matches[-1].end()
-        if speed >= 1.5:
-            # be aggressive: flush on last phrase boundary or if text is long enough
-            chunk = clean[:last_end]
-            if len(chunk.strip()) >= 1:
-                chunks.append(chunk)
-                return chunks, clean[last_end:]
-        else:
-            # moderate: flush only if chunk is reasonably long
-            chunk = clean[:last_end]
-            if len(chunk) >= min_phrase_chars:
-                chunks.append(chunk)
-                return chunks, clean[last_end:]
-
-    # If very long without punctuation and speed is high, flush a big chunk
-    if speed >= 1.5 and len(clean) >= max(80, min_phrase_chars):
-        chunks.append(clean)
-        return chunks, ""
-
-    return chunks, clean
+    # Fallback: if the runner didn't echo the tag at all, yield everything we saw.
+    if not saw_tag and buf_all:
+        yield buf_all
 
 def stream_chat(
     messages: List[Dict[str, str]],
@@ -259,16 +218,16 @@ def stream_chat(
         accum += ch
         clean = strip_ansi(accum)
 
-        # Find the last full sentence end
-        m = SENTENCE_RE.search(clean)
-        if m:
-            end_idx = m.end()
-            sentence = clean[:end_idx]
+        # Find the *last* full sentence end in the current buffer
+        matches = list(SENTENCE_RE.finditer(clean))
+        if matches:
+            end_idx = matches[-1].end()
+            sentence_block = clean[:end_idx]
             remainder = clean[end_idx:]
-            # Reset accum to only remainder *including any partial ansi codes stripped already*
+            # Reset accum to only remainder
             accum = remainder
-            # Yield trimmed sentence
-            yield sentence
+            # Yield trimmed block (may contain 1+ sentences)
+            yield sentence_block
 
     # Yield leftover tail (if any)
     tail = strip_ansi(accum).strip()
@@ -287,6 +246,7 @@ def chat(
     ctx: int = 4096,
     extra_args: Optional[List[str]] = None,
 ) -> str:
+    """Blocking convenience wrapper that joins the streamed sentences into one string."""
     parts = []
     for sent in stream_chat(
         messages,
@@ -298,8 +258,6 @@ def chat(
         threads=threads,
         ctx=ctx,
         extra_args=extra_args,
-        speed=speed,
-        min_phrase_chars=min_phrase_chars,
     ):
         parts.append(sent)
     return "".join(parts).strip()
