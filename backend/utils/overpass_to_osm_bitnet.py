@@ -1,22 +1,23 @@
 # overpass_to_osm.py
 """
-Overpass-to-OSM utilities with a fast local summariser based on BitNet.
+Overpass-to-OSM utilities powered by BitNet.
 
-- Replaces google/flan-t5-base with BitNet via backend/utils/bitnet_singleton.py
-- First call may load the backend (GGUF binary/py runner or HF fallback).
-- Subsequent calls are fast; runs fully locally if you have a BitNet GGUF/binary.
+Changes vs previous version:
+- Uses BitNet (backend/utils/bitnet_singleton.py) for BOTH:
+  (a) Overpass QL generation fallback, and
+  (b) local natural-language rewrite of results.
+- Keeps deterministic TAG_MAP → Overpass QL when possible.
+- No transformers/flan or llama_singleton required.
 
-Env tips:
-  - To force the HF fallback: export BITNET_FORCE_HF=1
-  - To point at a local HF dir: export BITNET_HF_MODEL_ID=/path/to/microsoft/bitnet-b1.58-2B-4T
-  - To prefer a local GGUF: place it under backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/
+Env tips for BitNet:
+  - Prefer local GGUF: backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/*.gguf
+  - Force HF fallback:    export BITNET_FORCE_HF=1
+  - Pick HF model/dir:    export BITNET_HF_MODEL_ID=microsoft/bitnet-b1.58-2B-4T or /path/to/local
 """
 from __future__ import annotations
 
-import os
 import json
 import re
-from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
@@ -26,16 +27,10 @@ from requests.exceptions import HTTPError
 from backend.utils.osm_tags import TAG_MAP, find_osm_tags
 from backend.utils.bitnet_singleton import chat as bitnet_chat
 
-_llm = get_llm()  # only used for generating the Overpass QL itself
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Constants & globals
-# ──────────────────────────────────────────────────────────────────────────────
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-# _BITNET_WARMED indicates we've done the first quick call to avoid cold-start
+# Optional warm flag to avoid cold-start hiccup on first call
 _BITNET_WARMED = False
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Small text helpers for nicer phrasing
@@ -73,20 +68,205 @@ def _baseline_sentence(items: List[str], total: int) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Core public functions
+# BitNet helpers
+# ──────────────────────────────────────────────────────────────────────────────
+def _warm_bitnet():
+    global _BITNET_WARMED
+    if _BITNET_WARMED:
+        return
+    try:
+        bitnet_chat(
+            [
+                {"role": "system", "content": "You are a concise assistant. Reply briefly."},
+                {"role": "user", "content": "warm-up"},
+            ],
+            max_new_tokens=8,
+            temperature=0.0,
+            top_p=0.95,
+        )
+    except Exception:
+        pass
+    _BITNET_WARMED = True
+
+
+def _bitnet_rewrite(baseline: str) -> str:
+    """
+    Use BitNet to rewrite a deterministic baseline into ONE concise, spoken sentence.
+    Falls back to the baseline on any error or failed validation.
+    """
+    _warm_bitnet()
+
+    system_inst = (
+        "Rewrite the user's baseline into exactly ONE friendly spoken sentence, under 28 words. "
+        "No lists, no semicolons, and keep real place names verbatim. "
+        "Use plain English and end with a period."
+    )
+
+    try:
+        out = bitnet_chat(
+            [
+                {"role": "system", "content": system_inst},
+                {"role": "user", "content": baseline},
+            ],
+            max_new_tokens=48,
+            temperature=0.1,
+            top_p=0.9,
+        ).strip()
+    except Exception:
+        return baseline
+
+    # Validate; otherwise revert to baseline
+    good_end = out.endswith((".", "!", "?"))
+    has_verb = re.search(r"\b(is|are|find|found|located|offers|includes|has|features)\b", out.lower())
+    within_len = 6 <= len(out.split()) <= 28
+    if not (good_end and has_verb and within_len and ";" not in out and "\n" not in out):
+        return baseline
+
+    return out
+
+
+def _bitnet_generate_overpass(question: str, lat: Optional[float], lon: Optional[float], radius: int) -> str:
+    """
+    Use BitNet to generate an Overpass QL query. We strictly sanitize and enforce
+    minimal requirements on the output (header + out center;).
+    """
+    _warm_bitnet()
+
+    sys_rules = (
+        "You are an expert in Overpass QL for OpenStreetMap. "
+        "Return ONLY a valid Overpass QL query (no prose, no markdown). "
+        "Rules:\n"
+        "- Always start with: [out:json][timeout:25];\n"
+        "- Always include `out center;` at the end (and a trailing semicolon).\n"
+        "- Prefer `node` if unsure, otherwise use both node and way; include relation if appropriate.\n"
+        "- If coordinates are provided, use (around:RADIUS,LAT,LON) with the provided values.\n"
+        "- Use relevant tags such as amenity, shop, tourism, leisure, highway, public_transport.\n"
+        "- Do not include explanations, comments, or code fences."
+    )
+
+    if lat is not None and lon is not None:
+        user_msg = (
+            f"Question: {question}\n"
+            f"Coordinates: lat={lat}, lon={lon}, radius={radius} meters.\n"
+            "Produce a single Overpass QL query that searches around the coordinates."
+        )
+    else:
+        user_msg = (
+            f"Question: {question}\n"
+            "No coordinates are provided; produce a single Overpass QL query that still works globally or with reasonable scope."
+        )
+
+    try:
+        raw = bitnet_chat(
+            [
+                {"role": "system", "content": sys_rules},
+                {"role": "user", "content": user_msg},
+            ],
+            max_new_tokens=220,
+            temperature=0.1,
+            top_p=0.9,
+        )
+    except Exception as e:
+        raise RuntimeError(f"BitNet Overpass generation failed: {e}")
+
+    q = _sanitize_overpass_output(raw, lat=lat, lon=lon, radius=radius)
+    if not q.strip():
+        raise RuntimeError("BitNet Overpass generation returned empty after sanitization.")
+    return q
+
+
+def _strip_code_fences(text: str) -> str:
+    # Prefer fenced block content if present
+    m = re.search(r"```(?:[a-zA-Z0-9_+-]*)\s*(.*?)```", text, flags=re.DOTALL)
+    if m:
+        return m.group(1)
+    # Otherwise remove single backticks and common prefixes like "A:" or "Answer:"
+    text = re.sub(r"^(\s*(A:|Answer:))", "", text.strip(), flags=re.IGNORECASE)
+    text = text.replace("```", "").strip("`").strip()
+    return text.strip()
+
+
+def _ensure_header(q: str) -> str:
+    if not q.lstrip().startswith("[out:json]"):
+        q = "[out:json][timeout:25];\n" + q.lstrip()
+    return q
+
+
+def _ensure_out_center(q: str) -> str:
+    # If 'out center;' not present, add it at end.
+    if "out center;" not in q:
+        if "out" in q:
+            # Replace bare 'out;' with 'out center;'
+            q = re.sub(r"\bout\s*;\s*$", "out center;", q.strip(), flags=re.IGNORECASE)
+        else:
+            q = q.rstrip() + "\nout center;"
+    return q
+
+
+def _ensure_final_semicolon(q: str) -> str:
+    if not q.rstrip().endswith(";"):
+        q = q.rstrip() + "\n;"
+    return q
+
+
+def _maybe_inject_around_clause(q: str, lat: Optional[float], lon: Optional[float], radius: int) -> str:
+    """
+    If coordinates provided but model didn't use them, inject (around:...) into node/way/relation selectors.
+    """
+    if lat is None or lon is None:
+        return q
+
+    if f"(around:{radius},{lat},{lon})" in q:
+        return q  # already present
+
+    # Heuristically insert around-clause after first node/way/relation selectors without an area/around/box.
+    def inject(selector: str, text: str) -> str:
+        pattern = rf"({selector}\s*(?:\[[^\]]+\]\s*)*)\s*(\([^)]*\))?"
+        def _repl(m):
+            head = m.group(1)
+            paren = m.group(2) or ""
+            if "around:" in paren or "area:" in paren or "," in paren:
+                return m.group(0)  # leave as is
+            return f"{head}(around:{radius},{lat},{lon})"
+        return re.sub(pattern, _repl, text, count=1, flags=re.IGNORECASE)
+
+    q2 = q
+    for sel in ("node", "way", "relation"):
+        q2 = inject(sel, q2)
+    return q2
+
+def _sanitize_overpass_output(text: str, lat: Optional[float], lon: Optional[float], radius: int) -> str:
+    q = _strip_code_fences(text)
+    # Strip inline comments or markdown-ish cruft
+    lines = []
+    for line in q.splitlines():
+        # Remove obvious comments (//, #) but keep Overpass comments /* ... */ out of scope
+        if re.match(r"\s*(//|#)", line):
+            continue
+        lines.append(line)
+    q = "\n".join(lines).strip()
+
+    q = _ensure_header(q)
+    q = _maybe_inject_around_clause(q, lat, lon, radius)
+    q = _ensure_out_center(q)
+    q = _ensure_final_semicolon(q)
+    return q
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Public functions
 # ──────────────────────────────────────────────────────────────────────────────
 def generate_overpass_query(question: str, lat: float = None, lon: float = None, radius: int = 2000) -> str:
     """
     Generate an Overpass QL query.
-    1. Try TAG_MAP deterministic generation.
-    2. Fall back to LLM if no match found.
+    1) Try deterministic TAG_MAP generation.
+    2) Fall back to BitNet-generated Overpass QL (sanitized).
     """
     tags = find_osm_tags(question)
 
     if tags:
         # ✅ Deterministic query
         conditions = "".join([f'["{k}"="{v}"]' for k, v in tags.items()])
-
         if lat is not None and lon is not None:
             query = f"""
 [out:json][timeout:25];
@@ -110,41 +290,8 @@ out center;
 """
         return query.strip()
 
-    # ❌ No TAG_MAP match → use LLM
-    prompt = f"""
-You are an expert at writing Overpass QL queries for OpenStreetMap.
-Rules:
-- Always include `out center;` at the end.
-- Use relevant tags: `amenity`, `shop`, `tourism`, `leisure`, `highway`, `public_transport`.
-- Prefer `node` if you don't know the type; otherwise use `node` + `way`.
-- If coordinates are provided, use (around:{radius},{lat},{lon}).
-- Output ONLY the Overpass query (no explanation).
-
-Examples:
-Q: "Find coffee shops near Times Square"
-A:
-[out:json][timeout:25];
-(
-  node["amenity"="cafe"](around:1000,40.7580,-73.9855);
-);
-out center;
-
-Q: "Where are public toilets in Paris?"
-A:
-[out:json][timeout:25];
-(
-  node["amenity"="toilets"](area:3602204096);
-  way["amenity"="toilets"](area:3602204096);
-);
-out center;
-
-Question: "{question}"
-"""
-    resp = _llm(prompt=prompt, max_tokens=80, temperature=0.1)
-    q = resp["choices"][0]["text"].strip()
-    if not q.endswith(";"):
-        q += "\n;"
-    return q
+    # ❌ No TAG_MAP match → use BitNet to synthesize Overpass QL
+    return _bitnet_generate_overpass(question, lat, lon, radius)
 
 
 def run_overpass_query(query: str) -> dict:
@@ -156,63 +303,10 @@ def run_overpass_query(query: str) -> dict:
         raise RuntimeError(f"Overpass API error: {e}") from e
 
 
-def _bitnet_rewrite(baseline: str) -> str:
-    """
-    Use BitNet to rewrite a deterministic baseline into ONE concise, spoken sentence.
-    Falls back to the baseline on any error.
-    """
-    global _BITNET_WARMED
-
-    system_inst = (
-        "Rewrite the user's baseline into exactly ONE friendly spoken sentence, under 28 words. "
-        "No lists, no semicolons, no numbered steps. Keep real place names verbatim. "
-        "Finish with a period."
-    )
-
-    # Warm-up (optional) to avoid first-call latency spikes.
-    if not _BITNET_WARMED:
-        try:
-            bitnet_chat(
-                [
-                    {"role": "system", "content": system_inst},
-                    {"role": "user", "content": "warm-up example sentence"},
-                ],
-                max_new_tokens=16,
-                temperature=0.0,
-                top_p=0.95,
-            )
-        except Exception:
-            pass
-        _BITNET_WARMED = True
-
-    try:
-        out = bitnet_chat(
-            [
-                {"role": "system", "content": system_inst},
-                {"role": "user", "content": baseline},
-            ],
-            max_new_tokens=48,
-            temperature=0.1,  # mostly deterministic, but allows minor polishing
-            top_p=0.9,
-        ).strip()
-    except Exception:
-        return baseline
-
-    # Validate; otherwise revert to baseline
-    good_end = out.endswith((".", "!", "?"))
-    has_verb = re.search(r"\b(is|are|find|found|located|offers|includes|has|features)\b", out.lower())
-    within_len = 6 <= len(out.split()) <= 28
-    if not (good_end and has_verb and within_len and ";" not in out and "\n" not in out):
-        return baseline
-
-    return out
-
-
 def summarize_results(question: str, data: dict) -> str:
     """
-    Build a clear baseline sentence from OSM tags, then let a local
-    BitNet model polish it. Falls back to the baseline if the model
-    output is malformed.
+    Build a clear baseline sentence from OSM tags, then let BitNet
+    polish it. Falls back to the baseline if the model output is malformed.
     """
     elements = data.get("elements", [])
     total = len(elements)
