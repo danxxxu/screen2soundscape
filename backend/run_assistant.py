@@ -83,9 +83,15 @@ def get_question(text=None, text_file=None):
 
 # ---------- Intent classifier (multilingual) ----------
 _NEARBY_WORDS_EN = r"(near( me|by)?|closest|around|in the area|near to|near\s+me)"
-_ROUTE_WORDS_EN = r"(route|directions|navigate|how to get|way to|get to|walk|bike|drive|bus|tram|subway|metro)"
-_OSM_TERMS_EN = r"(amenity|highway|shop|leisure|tourism|public\s*transport|osm|overpass|bbox|coordinates?)"
-_COORDS_RE = re.compile(r"\b(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\b")
+_ROUTE_WORDS_EN  = r"(route|directions|navigate|how to get|way to|get to|walk|bike|drive|bus|tram|subway|metro)"
+_OSM_TERMS_EN    = r"(amenity|highway|shop|leisure|tourism|public\s*transport|osm|overpass|bbox|coordinates?)"
+_COORDS_RE       = re.compile(r"\b(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\b")
+
+# NEW: strong “general” cues — if present, we avoid OSM unless there are explicit map cues
+_GENERAL_CUES_EN = re.compile(
+    r"\b(explain|what is|what's|difference between|compare|how does|why|in simple terms|pros and cons)\b",
+    re.IGNORECASE,
+)
 
 
 def _to_english(text: str) -> str:
@@ -101,48 +107,43 @@ def _to_english(text: str) -> str:
 
 def is_osm_query(question: str) -> bool:
     """
-    Be stricter to avoid misrouting generic questions:
-    - DO NOT count a default/fallback center alone as OSM intent.
-    - Require tags/bbox OR an explicit routing mode OR explicit start+end coords,
-      OR nearby/route keywords / explicit coords in the text.
+    Route to OSM only when the text clearly looks like a map/search/routing request.
+    Passing lat/lon via CLI must NOT influence this decision.
     """
     q_orig = (question or "").strip()
-    q_en = _to_english(q_orig).lower()
-    score = 0
+    q_en = _to_english(q_orig)
 
-    # 1) Deterministic tag hits (original or translated)
+    # If it *looks* like a knowledge Q (e.g., “Explain SIMD vs MIMD”), prefer GENERAL,
+    # unless there are explicit OSM/map cues.
+    looks_general = bool(_GENERAL_CUES_EN.search(q_en))
+
+    # Explicit map cues from text (not from CLI lat/lon)
+    has_nearby_or_route = bool(re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en))
+    has_coords_in_text  = bool(_COORDS_RE.search(q_en))
+    has_osm_words       = bool(re.search(_OSM_TERMS_EN, q_en))
+    tags_detected       = bool(find_osm_tags(q_orig) or find_osm_tags(q_en))
+
+    # Structured parse signals — EXCLUDE default center; require stronger evidence
+    parsed = {}
     try:
-        if find_osm_tags(q_orig) or find_osm_tags(q_en):
-            score += 2
+        parsed = parse_question(q_orig)
     except Exception:
-        pass
+        parsed = {}
+    strong_parse = any(
+        [
+            bool(parsed.get("tags")),
+            bool(parsed.get("bbox")),
+            parsed.get("mode") in ("route_check", "route_via"),
+            (bool(parsed.get("start_coords")) and bool(parsed.get("end_coords"))),
+        ]
+    )
 
-    # 2) Structured parse signals — exclude "center" alone
-    try:
-        params = parse_question(q_orig)
-        strong = any(
-            [
-                bool(params.get("tags")),
-                bool(params.get("bbox")),
-                params.get("mode") in ("route_check", "route_via"),
-                (bool(params.get("start_coords")) and bool(params.get("end_coords"))),
-            ]
-        )
-        if strong:
-            score += 2
-    except Exception:
-        pass
+    # If it looks like a general knowledge query and lacks explicit map cues → GENERAL
+    if looks_general and not (has_nearby_or_route or has_coords_in_text or has_osm_words or tags_detected):
+        return False
 
-    # 3) Nearby / routing semantics (after MT)
-    if re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en):
-        score += 1
-
-    # 4) Explicit coordinates or OSM-ish terms (after MT)
-    if _COORDS_RE.search(q_en) or re.search(_OSM_TERMS_EN, q_en):
-        score += 1
-
-    return score >= 2
-
+    # Otherwise require *some* clear OSM signal
+    return any([has_nearby_or_route, has_coords_in_text, has_osm_words, tags_detected, strong_parse])
 
 # ---------- Optional: OSRM routing ----------
 def get_directions(start, end, mode="walk"):
@@ -225,18 +226,36 @@ def run_general(
         return ""
 
 
-def _looks_invalid_overpass(q: str) -> bool:
-    if not q or not q.strip():
-        return True
-    # Common failure patterns from bad parsers
-    if "area:None" in q or "(area:None)" in q:
-        return True
-    if re.search(r"\bNone\b", q):
-        return True
-    return False
-
-
 def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None):
+    """
+    Robust OSM handler:
+    - parse question (lat/lon are just hints; they DO NOT force OSM intent)
+    - optional routing summary
+    - build deterministic Overpass QL; if invalid AND text clearly looks map-ish, use BitNet fallback
+    - run Overpass; summarize; translate; TTS
+    - on any API/build failure, speak a friendly message instead of crashing
+    """
+    # --- local helpers (kept inside to make this function fully drop-in) ---
+    def _looks_invalid_overpass(q: str) -> bool:
+        if not q or not q.strip():
+            return True
+        if "area:None" in q or "(area:None)" in q:
+            return True
+        if re.search(r"\bNone\b", q):
+            return True
+        return False
+
+    def _text_has_map_intent(q: str) -> bool:
+        # Use English for regex cues; tags check both original and translated
+        q_en = _to_english(q)
+        return any([
+            bool(find_osm_tags(q) or find_osm_tags(q_en)),
+            bool(re.search(_NEARBY_WORDS_EN, q_en)),
+            bool(re.search(_ROUTE_WORDS_EN, q_en)),
+            bool(re.search(_OSM_TERMS_EN, q_en)),
+            bool(_COORDS_RE.search(q_en)),
+        ])
+
     # Parse → (optional) route → Overpass → Summarize → Translate → TTS
     params = parse_question(question, lat=lat, lon=lon)
 
@@ -250,21 +269,17 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
         except Exception as e:
             print(f"⚠️ Routing failed: {e}")
 
-    # Build Overpass QL (deterministic builder → BitNet fallback if it STILL looks like a map query)
+    # Build Overpass QL (deterministic builder first)
     overpass_query = ""
     try:
         overpass_query = build_overpass_query(params)
     except Exception as e:
         print(f"⚠️ build_overpass_query failed: {e}")
 
+    # If invalid, only try BitNet QL when the *text* looks like a map request
     if _looks_invalid_overpass(overpass_query):
-        # Only try BitNet QL if the text actually looks like a map request
-        text_has_osm_intent = (
-            bool(find_osm_tags(question) or find_osm_tags(_to_english(question)))
-            or bool(re.search(_NEARBY_WORDS_EN, _to_english(question)))
-            or bool(_COORDS_RE.search(_to_english(question)))
-        )
-        if text_has_osm_intent:
+        if _text_has_map_intent(question):
+            # pick best center we know about
             clat, clon = None, None
             if params.get("center"):
                 clat, clon = params["center"]
@@ -272,20 +287,23 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
                 clat, clon = (lat, lon)
             try:
                 overpass_query = generate_overpass_query(
-                    question, lat=clat, lon=clon, radius=params.get("radius", 2000)
+                    question,
+                    lat=clat,
+                    lon=clon,
+                    radius=params.get("radius", 2000),
                 )
                 print("🧭 Overpass query (BitNet fallback):")
             except Exception as e:
                 msg = f"❌ Failed to generate Overpass query: {e}"
                 print(msg)
-                # Speak & return a friendly message instead of crashing
                 model_path = find_best_piper_model(MODEL_DIR, language, speaker)
                 speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
                 return msg
         else:
+            # Not a map request—guide to general mode
             msg = (
                 "This doesn’t look like a map request. "
-                "Try again with --force-mode general for a regular answer."
+                "Re-run with --force-mode general for a regular answer."
             )
             print(msg)
             model_path = find_best_piper_model(MODEL_DIR, language, speaker)
@@ -328,7 +346,7 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
         language=language,
         speaker_key=model_path,
         speed=speed,
-        output_mode=output_mode,
+        output_mode=output_mode,  # "file" or "stream"
     )
     print(spoken_text)
     return spoken_text
