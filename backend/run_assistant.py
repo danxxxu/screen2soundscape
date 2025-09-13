@@ -23,7 +23,7 @@ from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 # ---- OSM utils (your existing modules) ----
 from backend.utils.osm_tags import find_osm_tags
 from backend.utils.question_to_overpass import parse_question, build_overpass_query
-from backend.utils.overpass_to_osm_flan import (
+from backend.utils.overpass_to_osm_bitnet import (
     run_overpass_query,
     summarize_results,
     summarize_route,
