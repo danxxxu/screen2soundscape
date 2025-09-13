@@ -1,478 +1,290 @@
-# backend/run_assistant.py
-import os
+# backend/utils/overpass_to_osm_bitnet.py
+"""
+Overpass-to-OSM utilities powered by BitNet.
+
+Exports (for run_assistant.py compatibility):
+  - warmup_summariser()
+  - run_overpass_query()
+  - summarize_results()
+  - summarize_route()
+Optional:
+  - generate_overpass_query()  # BitNet fallback when TAG_MAP doesn't match
+"""
+
+from __future__ import annotations
+
 import re
-import time
 import json
-import argparse
-import warnings
-import logging
-import datetime
-import pathlib
+from pathlib import Path
+from typing import List, Optional
 
-# Quiet some libs
-os.environ["TORCH_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
-warnings.filterwarnings("ignore")
-logging.getLogger("tensorflow").setLevel(logging.ERROR)
-
-from backend.utils.bitnet_singleton import stream_chat  # general chat (BitNet)
-from backend.utils.transcribe import record_and_transcribe
-from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
-
-# ---- OSM utils (your existing modules) ----
-from backend.utils.osm_tags import find_osm_tags
-from backend.utils.question_to_overpass import parse_question, build_overpass_query
-from backend.utils.overpass_to_osm_bitnet import (
-    run_overpass_query,
-    summarize_results,
-    summarize_route,
-    warmup_summariser,
-)
-from deep_translator import GoogleTranslator
 import requests
+from requests.exceptions import HTTPError
 
+from backend.utils.osm_tags import find_osm_tags
+from backend.utils.bitnet_singleton import chat as bitnet_chat
 
-# ---------- Language detection ----------
-def detect_language(text: str) -> str:
-    """
-    Auto-detect language code for TTS.
-    Priority:
-      1) langdetect (if installed) -> ISO-639-1 like 'en', 'fr', ...
-      2) Unicode-script heuristics (CJK, Arabic, Cyrillic, Greek, Hebrew, etc.)
-      3) default 'en'
-    """
-    code = None
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Warmup (compat with previous API)
+# ──────────────────────────────────────────────────────────────────────────────
+_BITNET_WARMED = False
+
+def _warm_bitnet() -> None:
+    """Warm BitNet backend to avoid the first-call latency spike."""
+    global _BITNET_WARMED
+    if _BITNET_WARMED:
+        return
     try:
-        # pip install langdetect
-        from langdetect import detect, DetectorFactory
-        DetectorFactory.seed = 0
-        code = detect(text)
-    except Exception:
-        s = text or ""
-        if any("\u3040" <= ch <= "\u30ff" or "\u31f0" <= ch <= "\u31ff" for ch in s):  # Hiragana/Katakana
-            return "ja"
-        if any("\u4e00" <= ch <= "\u9fff" for ch in s):  # CJK (likely zh)
-            return "zh"
-        if any("\uac00" <= ch <= "\ud7af" for ch in s):  # Hangul
-            return "ko"
-        if any("\u0600" <= ch <= "\u06ff" or "\u0750" <= ch <= "\u077f" for ch in s):
-            return "ar"
-        if any("\u0590" <= ch <= "\u05ff" for ch in s):
-            return "he"
-        if any("\u0370" <= ch <= "\u03ff" for ch in s):
-            return "el"
-        if any("\u0400" <= ch <= "\u04FF" for ch in s):
-            return "ru"
-        if any("\u0E00" <= ch <= "\u0E7F" for ch in s):
-            return "th"
-        # crude Latin diacritic hints
-        if any(ch in "ñáéíóúü" for ch in s.lower()):
-            return "es"
-        if any(ch in "çéàèùâêîôûëï" for ch in s.lower()):
-            return "fr"
-        if any(ch in "äöüß" for ch in s.lower()):
-            return "de"
-        if any(ch in "åäö" for ch in s.lower()):
-            return "sv"
-        if any(ch in "øæå" for ch in s.lower()):
-            return "da"
-    return code or "en"
-
-
-def get_question(text=None, text_file=None):
-    if text:
-        return text.strip()
-    elif text_file and os.path.isfile(text_file):
-        with open(text_file, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    else:
-        return record_and_transcribe()
-
-
-# ---------- Intent classifier (multilingual) ----------
-_NEARBY_WORDS_EN = r"(near( me|by)?|closest|around|in the area|near to|near\s+me)"
-_ROUTE_WORDS_EN = r"(route|directions|navigate|how to get|way to|get to|walk|bike|drive|bus|tram|subway|metro)"
-_OSM_TERMS_EN = r"(amenity|highway|shop|leisure|tourism|public\s*transport|osm|overpass|bbox|coordinates?)"
-_COORDS_RE = re.compile(r"\b(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\b")
-
-
-def _to_english(text: str) -> str:
-    """Translate to English if detection says non-English. Fail-safe to original."""
-    try:
-        lang = detect_language(text)
-        if lang and str(lang).lower().startswith("en"):
-            return text
-        translated = GoogleTranslator(source="auto", target="en").translate(text)
-        return translated or text
-    except Exception:
-        return text
-
-
-def is_osm_query(question: str) -> bool:
-    """
-    Multilingual intent detector:
-      - Translate to English for regex/routing cues.
-      - Try TAG_MAP on both original and English.
-      - Try parse_question on original for structured hints.
-    Scoring:
-      +2 if deterministic OSM tags found (TAG_MAP)
-      +2 if parse_question reveals mode/center/bbox/tags/start+end coords
-      +1 if "nearby"/routing semantics in English
-      +1 if explicit coords or OSM-ish terms in English
-    Threshold >= 2 => route to OSM.
-    """
-    q_orig = (question or "").strip()
-    q_en = _to_english(q_orig).lower()
-    score = 0
-
-    # 1) Deterministic tag hits via your TAG_MAP (try both original & English)
-    try:
-        if find_osm_tags(q_orig) or find_osm_tags(q_en):
-            score += 2
-    except Exception:
-        pass
-
-    # 2) Parsability signal (use original so parser can leverage numbers/lat-lon text, etc.)
-    try:
-        params = parse_question(q_orig)
-        strong = any(
+        bitnet_chat(
             [
-                bool(params.get("mode")),
-                bool(params.get("center")),
-                bool(params.get("bbox")),
-                bool(params.get("tags")),
-                bool(params.get("start_coords")) and bool(params.get("end_coords")),
-            ]
+                {"role": "system", "content": "You are a concise assistant. Reply briefly."},
+                {"role": "user", "content": "warm-up"},
+            ],
+            max_new_tokens=8,
+            temperature=0.0,
+            top_p=0.95,
         )
-        if strong:
-            score += 2
     except Exception:
         pass
+    _BITNET_WARMED = True
 
-    # 3) Nearby / routing semantics (after MT)
-    if re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en):
-        score += 1
+def warmup_summariser() -> None:
+    """
+    Backwards-compatible warmup function expected by run_assistant.py.
+    No-op if already warmed.
+    """
+    _warm_bitnet()
 
-    # 4) Coordinates or OSM-ish terms (after MT)
-    if _COORDS_RE.search(q_en) or re.search(_OSM_TERMS_EN, q_en):
-        score += 1
-
-    return score >= 2
-
-
-# ---------- Optional: OSRM routing ----------
-def get_directions(start, end, mode="walk"):
-    profile = {"walk": "foot", "drive": "car", "bike": "bike"}.get(mode.lower(), "foot")
-    url = f"https://router.project-osrm.org/route/v1/{profile}/{start[1]},{start[0]};{end[1]},{end[0]}"
-    params = {"overview": "simplified", "geometries": "geojson", "steps": "true"}
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    return response.json()
+# For completeness, US spelling alias (safe to keep)
+def warmup_summarizer() -> None:
+    _warm_bitnet()
 
 
-# ---------- Handlers ----------
-def run_general(
-    question,
-    language,
-    speaker,
-    speed,
-    output_mode,
-    system_prompt,
-    max_new_tokens,
-    temperature,
-    top_p,
-    ctx,
-    threads,
-    bitnet_bin,
-    bitnet_model,
-    extra_args,
-):
-    # Prepare TTS
-    model_path_tts = find_best_piper_model(MODEL_DIR, language, speaker)
+# ──────────────────────────────────────────────────────────────────────────────
+# Small text helpers for nicer phrasing
+# ──────────────────────────────────────────────────────────────────────────────
+_STREET_TOKENS = (
+    "straat lane laan road rd street st avenue ave avenue av boul boulevard "
+    "blvd place plein square market markt drive dr weg quai kade dijk gracht"
+).split()
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": question},
-    ]
+def _choose_prep(street: str) -> str:
+    s = street.lower()
+    return "on" if any(tok in s for tok in _STREET_TOKENS) else "at"
 
-    collected = []
-    try:
-        gen = stream_chat(
-            messages,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            ctx=ctx,
-            threads=threads,
-            bitnet_bin=bitnet_bin,
-            bitnet_model=bitnet_model,
-            extra_args=extra_args,
-        )
+def _place_phrase(name: Optional[str], street: Optional[str]) -> Optional[str]:
+    """Return ‘Name on Street’, ‘Name’, or None."""
+    if not name and not street:
+        return None
+    if name and street:
+        return f"{name} {_choose_prep(street)} {street}"
+    return name or street
 
-        if output_mode == "stream":
-            print("🔊 Streaming as it generates...\n")
-            for chunk in gen:
-                print(chunk, end="", flush=True)
-                collected.append(chunk)
-                speak(
-                    chunk,
-                    language=language,
-                    speaker_key=model_path_tts,
-                    speed=speed,
-                    output_mode="stream",
-                )
-            print()
-            response_text = "".join(collected).strip()
+def _baseline_sentence(items: List[str], total: int) -> str:
+    """Deterministic, already-fluent fallback sentence."""
+    if total == 0:
+        return "I couldn't find any matching places nearby."
+    if total == 1:
+        return f"I found one place nearby: {items[0]}."
+    if total == 2:
+        return f"I found two places: {items[0]} and {items[1]}."
+    examples = ", ".join(items[:-1]) + f", and {items[-1]}"
+    return f"I found {total} places nearby; for example {examples}."
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Overpass QL via BitNet (optional helper if you want LLM fallback)
+# ──────────────────────────────────────────────────────────────────────────────
+def _strip_code_fences(text: str) -> str:
+    m = re.search(r"```(?:[a-zA-Z0-9_+-]*)\s*(.*?)```", text, flags=re.DOTALL)
+    if m:
+        return m.group(1)
+    text = re.sub(r"^(\s*(A:|Answer:))", "", text.strip(), flags=re.IGNORECASE)
+    return text.replace("```", "").strip("`").strip()
+
+def _ensure_header(q: str) -> str:
+    if not q.lstrip().startswith("[out:json]"):
+        q = "[out:json][timeout:25];\n" + q.lstrip()
+    return q
+
+def _ensure_out_center(q: str) -> str:
+    if "out center;" not in q:
+        if re.search(r"\bout\s*;\s*$", q, flags=re.IGNORECASE):
+            q = re.sub(r"\bout\s*;\s*$", "out center;", q.strip(), flags=re.IGNORECASE)
         else:
-            for chunk in gen:
-                print(chunk, end="", flush=True)
-                collected.append(chunk)
-            print()
-            response_text = "".join(collected).strip()
-            # Single-shot TTS
-            speak(
-                response_text,
-                language=language,
-                speaker_key=model_path_tts,
-                speed=speed,
-                output_mode="file",
-            )
-        return response_text
-    except Exception as e:
-        print(f"\n❌ BitNet inference failed: {e}")
-        return ""
+            q = q.rstrip() + "\nout center;"
+    return q
 
+def _ensure_final_semicolon(q: str) -> str:
+    if not q.rstrip().endswith(";"):
+        q = q.rstrip() + "\n;"
+    return q
 
-def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None):
-    warmup_summariser()
+def _maybe_inject_around_clause(q: str, lat: Optional[float], lon: Optional[float], radius: int) -> str:
+    if lat is None or lon is None:
+        return q
+    needle = f"(around:{radius},{lat},{lon})"
+    if needle in q:
+        return q
 
-    # Parse → (optional) route → Overpass → Summarize → Translate → TTS
-    params = parse_question(question, lat=lat, lon=lon)
+    def inject(selector: str, text: str) -> str:
+        pattern = rf"({selector}\s*(?:\[[^\]]+\]\s*)*)\s*(\([^)]*\))?"
+        def _repl(m):
+            head = m.group(1)
+            paren = m.group(2) or ""
+            if any(k in paren for k in ("around:", "area:", ",")):
+                return m.group(0)
+            return f"{head}{needle}"
+        return re.sub(pattern, _repl, text, count=1, flags=re.IGNORECASE)
 
-    # Optional routing summary
-    if params.get("mode") in ("route_check", "route_via"):
-        try:
-            directions = get_directions(params["start_coords"], params["end_coords"])
-            route_summary = summarize_route(directions)
-            print("🗺️ Route summary:")
-            print(route_summary)
-        except Exception as e:
-            print(f"⚠️ Routing failed: {e}")
+    for sel in ("node", "way", "relation"):
+        q = inject(sel, q)
+    return q
 
-    # Build Overpass QL
-    overpass_query = build_overpass_query(params)
-    print("🧭 Overpass query:")
-    print(overpass_query)
+def _sanitize_overpass_output(text: str, lat: Optional[float], lon: Optional[float], radius: int) -> str:
+    q = _strip_code_fences(text)
+    # Remove line comments like // or #
+    q = "\n".join(line for line in q.splitlines() if not re.match(r"\s*(//|#)", line)).strip()
+    q = _ensure_header(q)
+    q = _maybe_inject_around_clause(q, lat, lon, radius)
+    q = _ensure_out_center(q)
+    q = _ensure_final_semicolon(q)
+    return q
 
-    # Run Overpass
-    results = run_overpass_query(overpass_query)
-    print(f"✅ Overpass returned {len(results.get('elements', []))} element(s).")
+def generate_overpass_query(question: str, lat: float = None, lon: float = None, radius: int = 2000) -> str:
+    """
+    Optional helper: Try deterministic TAG_MAP first (if your caller wants that),
+    else ask BitNet to synthesize Overpass QL.
+    """
+    tags = find_osm_tags(question) or {}
+    if tags:
+        cond = "".join([f'["{k}"="{v}"]' for k, v in tags.items()])
+        if lat is not None and lon is not None:
+            return f"""[out:json][timeout:25];
+(
+  node{cond}(around:{radius},{lat},{lon});
+  way{cond}(around:{radius},{lat},{lon});
+  relation{cond}(around:{radius},{lat},{lon});
+);
+out center;
+""".strip()
+        return f"""[out:json][timeout:25];
+(
+  node{cond};
+  way{cond};
+  relation{cond};
+);
+out center;
+""".strip()
 
-    # Summarize (English)
-    summary_en = summarize_results(question, results)
-
-    # Translate if needed
-    lang_code = (language or "en").lower()
-    spoken_text = summary_en
-    if lang_code not in ["en", "en_us", "en_newest"]:
-        try:
-            spoken_text = GoogleTranslator(source="en", target=lang_code).translate(summary_en)
-        except Exception as e:
-            print(f"⚠️ Translation failed ({lang_code}): {e}")
-            spoken_text = summary_en
-
-    # TTS
-    model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-    speak(
-        spoken_text,
-        language=language,
-        speaker_key=model_path,
-        speed=speed,
-        output_mode=output_mode,  # "file" or "stream"
+    # BitNet fallback
+    _warm_bitnet()
+    sys_rules = (
+        "You are an expert in Overpass QL for OpenStreetMap. "
+        "Return ONLY a valid Overpass QL query (no prose, no markdown). "
+        "Rules:\n"
+        "- Start with [out:json][timeout:25];\n"
+        "- Include `out center;` at the end and a trailing semicolon.\n"
+        "- Prefer node when unsure; otherwise use node + way, and relation if appropriate.\n"
+        "- If coordinates provided, use (around:RADIUS,LAT,LON).\n"
+        "- Use relevant tags: amenity, shop, tourism, leisure, highway, public_transport."
     )
-    print(spoken_text)
-    return spoken_text
-
-
-# ---------- Main unified runner ----------
-def main(
-    speaker,
-    language,  # "auto" → detect from question
-    speed,
-    text,
-    text_file,
-    output_mode,  # "stream" (general) or "file"/"stream" (OSM)
-    force_mode,  # "auto" | "osm" | "general"
-    save_txt,  # save Q&A to saved_questions/<timestamp>.txt
-    system_prompt,
-    max_new_tokens,
-    temperature,
-    top_p,
-    ctx,
-    threads,
-    bitnet_bin,
-    bitnet_model,
-    extra_args,
-    lat,
-    lon,
-):
-    # Step 1: Get question
-    print("🕒 Step 1: Getting question...")
-    t1 = time.time()
-    question = get_question(text=text, text_file=text_file)
-    t2 = time.time()
-    print(f"✅ Got question: {question}")
-    print(f"⏱️ Step 1 duration: {t2 - t1:.2f} s\n")
-
-    # Step 2: Language
-    if (language is None) or (str(language).strip().lower() == "auto"):
-        language = detect_language(question)
-    print(f"🌐 Using language: {language}")
-
-    # Step 3: Intent routing
-    chosen = force_mode.lower()
-    if chosen == "auto":
-        chosen = "osm" if is_osm_query(question) else "general"
-    print(f"🧭 Routed to: {chosen.upper()}")
-
-    # Step 4: Run chosen path
-    t3 = time.time()
-    if chosen == "osm":
-        # For OSM, respect user-selected output_mode ("file" or "stream")
-        out = run_osm(
-            question=question,
-            language=language,
-            speaker=speaker,
-            speed=speed,
-            output_mode=output_mode,
-            lat=lat,
-            lon=lon,
+    if lat is not None and lon is not None:
+        user = (
+            f"Question: {question}\n"
+            f"Coordinates: lat={lat}, lon={lon}, radius={radius} meters.\n"
+            "Produce a single Overpass QL query that searches around the coordinates."
         )
-        # Optional fallback: if no results text suggests emptiness, we could call general; omitted for clarity.
     else:
-        out = run_general(
-            question=question,
-            language=language,
-            speaker=speaker,
-            speed=speed,
-            output_mode=output_mode,
-            system_prompt=system_prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            ctx=ctx,
-            threads=threads,
-            bitnet_bin=bitnet_bin,
-            bitnet_model=bitnet_model,
-            extra_args=extra_args,
-        )
-    t4 = time.time()
-    print(f"\n🎉 Completed in {t4 - t1:.2f} s (handler: {t4 - t3:.2f} s).")
+        user = f"Question: {question}\nNo coordinates provided; produce a single Overpass QL query."
 
-    # Step 5: Save Q&A to timestamped TXT (default: on)
-    if save_txt:
-        try:
-            ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-            outdir = pathlib.Path("saved_questions")
-            outdir.mkdir(parents=True, exist_ok=True)
-            path = outdir / f"{ts}.txt"
-            with open(path, "w", encoding="utf-8") as f:
-                f.write("Question:\n")
-                f.write((question or "").strip() + "\n\n")
-                f.write("Answer:\n")
-                f.write((out or "").strip() + "\n")
-            print(f"📝 Saved Q&A to {path.as_posix()}")
-        except Exception as e:
-            print(f"⚠️ Failed to save Q&A: {e}")
+    raw = bitnet_chat(
+        [{"role": "system", "content": sys_rules}, {"role": "user", "content": user}],
+        max_new_tokens=220,
+        temperature=0.1,
+        top_p=0.9,
+    )
+    q = _sanitize_overpass_output(raw, lat=lat, lon=lon, radius=radius)
+    if not q.strip():
+        raise RuntimeError("BitNet Overpass generation returned empty after sanitization.")
+    return q
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Overpass API and summaries
+# ──────────────────────────────────────────────────────────────────────────────
+def run_overpass_query(query: str) -> dict:
+    try:
+        r = requests.post(OVERPASS_URL, data={"data": query}, timeout=20)
+        r.raise_for_status()
+        return r.json()
+    except HTTPError as e:
+        raise RuntimeError(f"Overpass API error: {e}") from e
+
+def _bitnet_rewrite(baseline: str) -> str:
+    _warm_bitnet()
+    system_inst = (
+        "Rewrite the user's baseline into exactly ONE friendly spoken sentence, under 28 words. "
+        "No lists, no semicolons; keep real place names verbatim. "
+        "Plain English. End with a period."
+    )
+    try:
+        out = bitnet_chat(
+            [{"role": "system", "content": system_inst}, {"role": "user", "content": baseline}],
+            max_new_tokens=48,
+            temperature=0.1,
+            top_p=0.9,
+        ).strip()
+    except Exception:
+        return baseline
+
+    good_end = out.endswith((".", "!", "?"))
+    has_verb = re.search(r"\b(is|are|find|found|located|offers|includes|has|features)\b", out.lower())
+    within_len = 6 <= len(out.split()) <= 28
+    if not (good_end and has_verb and within_len and ";" not in out and "\n" not in out):
+        return baseline
     return out
 
+def summarize_results(question: str, data: dict) -> str:
+    elements = data.get("elements", [])
+    total = len(elements)
+    if total == 0:
+        return "Sorry, I couldn't find any relevant places for your query."
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Unified assistant: auto-routes between general chat and OSM, saves Q&A to txt."
-    )
-    parser.add_argument("--speaker", type=str, default="amy", help="Piper speaker name")
-    parser.add_argument("--language", type=str, default="auto", help="TTS language code (or 'auto')")
-    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
-    parser.add_argument("--text", type=str, help="Provide a question as text input instead of recording")
-    parser.add_argument("--text-file", type=str, help="Provide a question via a text file instead of recording")
-    parser.add_argument(
-        "--output-mode",
-        type=str,
-        choices=["file", "stream"],
-        default="stream",
-        help="General chat streams by default; OSM respects your choice here.",
-    )
-    parser.add_argument(
-        "--force-mode",
-        type=str,
-        choices=["auto", "osm", "general"],
-        default="auto",
-        help="Force routing (useful for debugging).",
-    )
+    phrases: List[str] = []
+    for el in elements[:3]:
+        tags = el.get("tags", {}) or {}
+        name = tags.get("name")
+        street = tags.get("addr:street") or tags.get("addr:full")
+        t = tags.get("amenity") or tags.get("shop") or tags.get("tourism") or tags.get("leisure")
+        phrase = _place_phrase(name or (f"a {t}" if t else None), street)
+        if phrase:
+            phrases.append(phrase)
 
-    # Save Q&A toggle (default ON)
-    parser.add_argument(
-        "--save-txt",
-        dest="save_txt",
-        action="store_true",
-        help="Save the question and answer to saved_questions/<timestamp>.txt (default: on)",
-    )
-    parser.add_argument(
-        "--no-save-txt",
-        dest="save_txt",
-        action="store_false",
-        help="Disable saving the question/answer text file",
-    )
-    parser.set_defaults(save_txt=True)
+    baseline = _baseline_sentence(phrases, total)
+    return _bitnet_rewrite(baseline)
 
-    # BitNet / general
-    parser.add_argument(
-        "--system-prompt",
-        type=str,
-        default="You are a helpful AI assistant for everyday tasks, please always respond in the same language as the question",
-        help="System instruction to steer responses.",
-    )
-    parser.add_argument("--max-new-tokens", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=0.7)
-    parser.add_argument("--top-p", type=float, default=0.95)
-    parser.add_argument("--ctx", type=int, default=4096)
-    parser.add_argument("--threads", type=int, default=None, help="CPU threads (default: os.cpu_count())")
-    parser.add_argument("--bitnet-bin", type=str, default="bitnet", help="Path to the bitnet.cpp binary")
-    parser.add_argument(
-        "--bitnet-model",
-        type=str,
-        default="~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/ggml-model-q4_0.gguf",
-        help="Path to a .gguf file or a directory containing GGUF files.",
-    )
-    parser.add_argument("--extra-args", type=str, nargs="*", default=None, help="Extra args passed to bitnet.cpp")
-
-    # Optional geohints for OSM
-    parser.add_argument("--lat", type=float, help="Latitude of the current user location")
-    parser.add_argument("--lon", type=float, help="Longitude of the current user location")
-
-    args = parser.parse_args()
-
-    main(
-        speaker=args.speaker,
-        language=args.language,
-        speed=args.speed,
-        text=args.text,
-        text_file=args.text_file,
-        output_mode=args.output_mode,
-        force_mode=args.force_mode,
-        save_txt=args.save_txt,
-        system_prompt=args.system_prompt,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        ctx=args.ctx,
-        threads=args.threads,
-        bitnet_bin=args.bitnet_bin,
-        bitnet_model=args.bitnet_model,
-        extra_args=args.extra_args,
-        lat=args.lat,
-        lon=args.lon,
-    )
+def summarize_route(directions_json: dict) -> str:
+    try:
+        route = directions_json["routes"][0]
+        leg = route["legs"][0]
+        steps = leg["steps"]
+        lines = [
+            f"The route is about {round(route['distance'] / 1000, 1)} kilometres "
+            f"and will take approximately {round(route['duration'] / 60)} minutes.",
+            "Here are the step-by-step directions:",
+        ]
+        for i, step in enumerate(steps, 1):
+            man = step.get("maneuver", {})
+            instr = man.get("instruction") or man.get("type", "Move")
+            sent = f"{i}. {instr}"
+            if step.get("name"):
+                sent += f" onto {step['name']}"
+            if step.get("duration"):
+                sent += f" for about {round(step['duration'] / 60, 1)} minutes"
+            lines.append(sent)
+        return "\n".join(lines)
+    except Exception as e:
+        return f"⚠️ Could not summarise route: {e}"
