@@ -16,6 +16,12 @@ Public API (unchanged):
   - chat(messages, ...) -> str
   - stream_chat(messages, ...) -> iterator (yields completed sentences)
 """
+_HF_TOKENIZER = None
+_HF_MODEL = None
+_HF_DEVICE = "cpu"
+_HF_DTYPE = None
+_HF_SRC = None
+_STICKY_MODE = None
 
 import os
 import re
@@ -110,17 +116,15 @@ def _default_py_runner() -> str:
     return cand if os.path.isfile(cand) else ""
 
 def _resolve_runner(bitnet_bin: str) -> dict:
-    """
-    Decide which runner to use.
-    Returns dict:
-      {"mode": "bin"|"py"|"hf",
-       "exe": <path or None>,
-       "script": <path or None>,
-       "why": <text>}
-    """
+    global _STICKY_MODE
+
+    # If we already decided once, stick to it.
+    if _STICKY_MODE:
+        return {"mode": _STICKY_MODE, "exe": None, "script": None, "why": f"sticky { _STICKY_MODE }"}
 
     if os.environ.get("BITNET_FORCE_HF") == "1":
-      return {"mode": "hf", "exe": None, "script": None, "why": "env forced HF"}
+        _STICKY_MODE = "hf"
+        return {"mode": "hf", "exe": None, "script": None, "why": "env forced HF"}
 
     # 1) C++ binary (absolute or on PATH)
     if bitnet_bin:
@@ -247,10 +251,20 @@ def _hf_pick_device_dtype() -> Tuple[str, "torch.dtype"]:
         return "mps", torch.float16
     return "cpu", torch.float32
 
-def _hf_load(src: Optional[str] = None):
-    global _HF_TOKENIZER, _HF_MODEL, _HF_DEVICE, _HF_DTYPE, _HF_SRC
-    if _HF_MODEL is not None:
-        return
+def _hf_load(src: Optional[str] = None) -> Tuple["AutoTokenizer", "AutoModelForCausalLM"]:
+    """
+    Force-load the Hugging Face fallback model/tokenizer into memory.
+
+    - If already loaded, returns the cached objects immediately.
+    - If not yet loaded, loads them and pins the backend mode to 'hf'
+      so subsequent calls to stream_chat/chat reuse this instance.
+    """
+    global _HF_TOKENIZER, _HF_MODEL, _HF_DEVICE, _HF_DTYPE, _HF_SRC, _STICKY_MODE
+
+    # If already loaded, just return the cached objects.
+    if _HF_MODEL is not None and _HF_TOKENIZER is not None:
+        return _HF_TOKENIZER, _HF_MODEL
+
     if not _HF_AVAILABLE:
         raise RuntimeError(
             "HF fallback requested but transformers/torch not available. "
@@ -258,6 +272,7 @@ def _hf_load(src: Optional[str] = None):
             "  pip install --upgrade torch accelerate sentencepiece\n"
             "  pip install 'git+https://github.com/huggingface/transformers.git@096f25ae1f501a084d8ff2dcaf25fbc2bd60eba4'\n"
         )
+
     _HF_DEVICE, _HF_DTYPE = _hf_pick_device_dtype()
 
     # Prefer local dir if present
@@ -269,19 +284,32 @@ def _hf_load(src: Optional[str] = None):
     else:
         _HF_SRC = os.environ.get("BITNET_HF_MODEL_ID", "microsoft/bitnet-b1.58-2B-4T")
 
+    # Load tokenizer
     _HF_TOKENIZER = AutoTokenizer.from_pretrained(_HF_SRC)
     if _HF_TOKENIZER.pad_token_id is None and _HF_TOKENIZER.eos_token_id is not None:
         _HF_TOKENIZER.pad_token = _HF_TOKENIZER.eos_token
 
+    # Load model to chosen device
     _HF_MODEL = AutoModelForCausalLM.from_pretrained(_HF_SRC, torch_dtype=_HF_DTYPE)
     if _HF_DEVICE != "cpu":
         _HF_MODEL = _HF_MODEL.to(_HF_DEVICE)
-    # generation config safety
+
+    # Generation config safety
     gc = _HF_MODEL.generation_config
     if gc.pad_token_id is None and _HF_TOKENIZER.pad_token_id is not None:
         gc.pad_token_id = _HF_TOKENIZER.pad_token_id
     if gc.eos_token_id is None and _HF_TOKENIZER.eos_token_id is not None:
         gc.eos_token_id = _HF_TOKENIZER.eos_token_id
+
+    # Make backend choice sticky so _resolve_runner stays on HF
+    try:
+        _STICKY_MODE = "hf"
+    except NameError:
+        # if you haven't defined _STICKY_MODE yet, you can just skip this
+        pass
+
+    return _HF_TOKENIZER, _HF_MODEL
+
 
 def _hf_stream(system_msg: str, user_msg: str, max_new_tokens: int, temperature: float, top_p: float) -> Iterator[str]:
     _hf_load()
