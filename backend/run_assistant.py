@@ -357,12 +357,6 @@ def is_location_general(question: str, lat=None, lon=None) -> bool:
 
 
 def run_place_info(question, language, speaker, speed, output_mode, lat=None, lon=None, radius_m=500):
-    """
-    Location-aware general handler:
-    - Reverse geocode coords to a human-readable place (in the user's language).
-    - If the question asks for history/about-here, fetch a nearby Wikipedia summary.
-    - Answer in the user's language and speak it.
-    """
     # Resolve coordinates from CLI or explicit coordinates in the text (no LLM, no parse_question)
     coords = None
     if lat is not None and lon is not None:
@@ -393,9 +387,9 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
 
     lat_c, lon_c = coords
 
-    # --- Reverse geocode via Nominatim, forcing labels in the user's language ---
+    # Reverse geocode (respect user language)
     try:
-        headers = {"User-Agent": "screen2soundscape/1.0 (contact@example.com)"}  # set your UA/email
+        headers = {"User-Agent": "screen2soundscape/1.0 (contact@example.com)"}
         lang_short = (language or "en").split("_")[0].split("-")[0] or "en"
         r = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
@@ -418,7 +412,6 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
 
     display_name = rev.get("display_name") or ""
     addr = rev.get("address") or {}
-    # Useful bits if present
     house = addr.get("house_number")
     road = addr.get("road") or addr.get("pedestrian") or addr.get("footway")
     neigh = addr.get("neighbourhood") or addr.get("suburb")
@@ -427,34 +420,31 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
     postcode = addr.get("postcode")
     country = addr.get("country")
 
-    where_line = None
     if any([house, road, neigh, city, state, country]):
-        parts = []
-        if house and road: parts.append(f"{house} {road}")
-        elif road: parts.append(road)
-        if neigh: parts.append(neigh)
-        if city: parts.append(city)
-        if state: parts.append(state)
-        if postcode: parts.append(postcode)
-        if country: parts.append(country)
-        where_line = ", ".join([p for p in parts if p])
+        parts_line = []
+        if house and road: parts_line.append(f"{house} {road}")
+        elif road: parts_line.append(road)
+        if neigh: parts_line.append(neigh)
+        if city: parts_line.append(city)
+        if state: parts_line.append(state)
+        if postcode: parts_line.append(postcode)
+        if country: parts_line.append(country)
+        where_line = ", ".join([p for p in parts_line if p])
     else:
         where_line = display_name or f"{lat_c:.5f}, {lon_c:.5f}"
 
-    # Decide if the user asked about "history/about here"
+    # History/about-here intent
     q_en = _to_english(question)
     wants_history = bool(
         re.search(
             r"\b(history|what happened|when was (this|here) (built|founded)|who built (this|here)|tell me about\b)",
-            q_en,
-            flags=re.IGNORECASE,
+            q_en, flags=re.IGNORECASE
         )
     )
 
     wiki_snippet = ""
     if wants_history:
         try:
-            # Wikipedia geosearch for nearby pages; pick the best extract
             params = {
                 "action": "query",
                 "generator": "geosearch",
@@ -482,22 +472,18 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
         except Exception as e:
             print(f"⚠️ Wikipedia lookup failed: {e}")
 
-    # Compose response in English first, then translate to the question's language
-    parts = []
+    # Compose response (English → translate)
+    lines = []
     if re.search(r"where am i", q_en, re.IGNORECASE):
-        parts.append(f"You're at {where_line}.")
-        parts.append(f"Coordinates: {lat_c:.5f}, {lon_c:.5f}.")
+        lines.append(f"You're at {where_line}.")
+        lines.append(f"Coordinates: {lat_c:.5f}, {lon_c:.5f}.")
     else:
-        parts.append(f"You're around {where_line} ({lat_c:.5f}, {lon_c:.5f}).")
-
+        lines.append(f"You're around {where_line} ({lat_c:.5f}, {lon_c:.5f}).")
     if wiki_snippet:
-        parts.append("")
-        parts.append("A bit of local context:")
-        parts.append(wiki_snippet)
+        lines += ["", "A bit of local context:", wiki_snippet]
 
-    summary_en = "\n".join(parts).strip()
+    summary_en = "\n".join(lines).strip()
 
-    # Translate if needed
     lang_code = (language or "en").lower()
     spoken_text = summary_en
     if lang_code not in ["en", "en_us", "en-newest", "en_newest"]:
@@ -507,16 +493,24 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
             print(f"⚠️ Translation failed ({lang_code}): {e}")
             spoken_text = summary_en
 
-    # TTS
-    model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+    # ✅ PRINT BEFORE TTS so you immediately see the result
+    print(spoken_text, flush=True)
 
-    return speak(
-        spoken_text,
-        language=language,
-        speaker_key=model_path,
-        speed=speed,
-        output_mode=output_mode,
-    )
+    # TTS — guard so failures don’t swallow output
+    try:
+        model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+        speak(
+            spoken_text,
+            language=language,
+            speaker_key=model_path,
+            speed=speed,
+            output_mode=output_mode,  # "stream" or "file"
+        )
+    except Exception as e:
+        print(f"⚠️ TTS failed: {e}")
+
+    return spoken_text
+
 
 
 
