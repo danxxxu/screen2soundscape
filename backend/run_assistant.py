@@ -352,6 +352,195 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
     return spoken_text
 
 
+# Add near the other intent cues:
+_LOC_GENERAL_CUES_EN = re.compile(
+    r"(where am i|what('?| i)s this (place|location)|history of (this|here|this place|this location)|"
+    r"what happened here|what neighborhood am i in|what district am i in|tell me about (here|this place|this location))",
+    re.IGNORECASE,
+)
+
+def is_location_general(question: str, lat=None, lon=None) -> bool:
+    q_orig = (question or "").strip()
+    q_en = _to_english(q_orig)
+
+    # We only want this mode if we have *some* coords (from CLI or parse) and
+    # we don't see explicit OSM cues like "nearby/amenity/route".
+    has_loc_general = bool(_LOC_GENERAL_CUES_EN.search(q_en))
+    has_osmish = bool(re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en) or re.search(_OSM_TERMS_EN, q_en))
+
+    if not has_loc_general or has_osmish:
+        return False
+
+    # Do we have coordinates available somewhere?
+    # Prefer parse_question center; otherwise use CLI lat/lon; otherwise coords typed in question.
+    parsed = {}
+    try:
+        parsed = parse_question(q_orig) or {}
+    except Exception:
+        parsed = {}
+    center = parsed.get("center")
+    if center and all(isinstance(v, (int, float)) for v in center):
+        return True
+    if lat is not None and lon is not None:
+        return True
+    if _COORDS_RE.search(q_en):
+        return True
+
+    return False
+
+def run_place_info(question, language, speaker, speed, output_mode, lat=None, lon=None, radius_m=500):
+    """
+    Location-aware general handler:
+    - Reverse geocode coords to a human-readable place.
+    - If the question asks for history/about-here, fetch a nearby Wikipedia summary.
+    - Answer in the user's language and speak it.
+    """
+    # Resolve coordinates consistently
+    coords = None
+    try:
+        parsed = parse_question(question, lat=lat, lon=lon) or {}
+        if parsed.get("center"):
+            coords = parsed["center"]  # (lat, lon)
+    except Exception:
+        pass
+    if (coords is None) and (lat is not None and lon is not None):
+        coords = (lat, lon)
+    if coords is None:
+        # No coords → just treat as general
+        return run_general(
+            question=question,
+            language=language,
+            speaker=speaker,
+            speed=speed,
+            output_mode=output_mode,
+            system_prompt="You are a helpful AI assistant for everyday tasks, please always respond in the same language as the question",
+            max_new_tokens=256,
+            temperature=0.7,
+            top_p=0.95,
+            ctx=4096,
+            threads=None,
+            bitnet_bin="bitnet",
+            bitnet_model="~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/ggml-model-q4_0.gguf",
+            extra_args=None,
+        )
+
+    lat_c, lon_c = coords
+    # --- Reverse geocode via Nominatim ---
+    try:
+        headers = {"User-Agent": "screen2soundscape/1.0 (contact@example.com)"}  # set your UA/email
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"format": "jsonv2", "lat": lat_c, "lon": lon_c, "zoom": 18, "addressdetails": 1},
+            headers=headers,
+            timeout=10,
+        )
+        r.raise_for_status()
+        rev = r.json()
+    except Exception as e:
+        rev = {}
+        print(f"⚠️ Reverse geocoding failed: {e}")
+
+    display_name = rev.get("display_name") or ""
+    addr = rev.get("address") or {}
+    # Useful bits if present
+    house = addr.get("house_number")
+    road = addr.get("road") or addr.get("pedestrian") or addr.get("footway")
+    neigh = addr.get("neighbourhood") or addr.get("suburb")
+    city = addr.get("city") or addr.get("town") or addr.get("village")
+    state = addr.get("state")
+    postcode = addr.get("postcode")
+    country = addr.get("country")
+
+    where_line = None
+    if any([house, road, neigh, city, state, country]):
+        parts = []
+        if house and road: parts.append(f"{house} {road}")
+        elif road: parts.append(road)
+        if neigh: parts.append(neigh)
+        if city: parts.append(city)
+        if state: parts.append(state)
+        if postcode: parts.append(postcode)
+        if country: parts.append(country)
+        where_line = ", ".join([p for p in parts if p])
+    else:
+        where_line = display_name or f"{lat_c:.5f}, {lon_c:.5f}"
+
+    # Decide if the user asked about "history/about here"
+    q_en = _to_english(question)
+    wants_history = bool(re.search(r"\b(history|what happened|when was (this|here) (built|founded)|who built (this|here)|tell me about\b)", q_en, flags=re.IGNORECASE))
+
+    wiki_snippet = ""
+    if wants_history:
+        try:
+            # Wikipedia geosearch for nearby pages; pick the best extract
+            params = {
+                "action": "query",
+                "generator": "geosearch",
+                "prop": "extracts|info",
+                "exintro": 1,
+                "explaintext": 1,
+                "inprop": "url",
+                "ggscoord": f"{lat_c}|{lon_c}",
+                "ggsradius": max(100, min(radius_m, 3000)),
+                "ggslimit": 10,
+                "format": "json",
+            }
+            w = requests.get("https://en.wikipedia.org/w/api.php", params=params, timeout=10)
+            w.raise_for_status()
+            data = w.json()
+            pages = list((data.get("query") or {}).get("pages", {}).values())
+            # Choose the page with the longest non-empty extract
+            pages = [p for p in pages if p.get("extract")]
+            if pages:
+                best = max(pages, key=lambda p: len(p.get("extract", "")))
+                title = best.get("title", "")
+                extract = best.get("extract", "")
+                # Keep it tight
+                wiki_snippet = f"{title}: {extract.strip()}"
+                if len(wiki_snippet) > 900:
+                    wiki_snippet = wiki_snippet[:900].rsplit(" ", 1)[0] + "…"
+        except Exception as e:
+            print(f"⚠️ Wikipedia lookup failed: {e}")
+
+    # Compose response (English → then translate if needed)
+    parts = []
+    if re.search(r"where am i", q_en, re.IGNORECASE):
+        parts.append(f"You're at {where_line}.")
+        parts.append(f"Coordinates: {lat_c:.5f}, {lon_c:.5f}.")
+    else:
+        # Generic “about here”
+        parts.append(f"You're around {where_line} ({lat_c:.5f}, {lon_c:.5f}).")
+
+    if wiki_snippet:
+        parts.append("")
+        parts.append("A bit of local context:")
+        parts.append(wiki_snippet)
+
+    summary_en = "\n".join(parts).strip()
+
+    # Translate if needed
+    lang_code = (language or "en").lower()
+    spoken_text = summary_en
+    if lang_code not in ["en", "en_us", "en_newest"]:
+        try:
+            spoken_text = GoogleTranslator(source="en", target=lang_code).translate(summary_en)
+        except Exception as e:
+            print(f"⚠️ Translation failed ({lang_code}): {e}")
+            spoken_text = summary_en
+
+    # TTS
+    model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+    speak(
+        spoken_text,
+        language=language,
+        speaker_key=model_path,
+        speed=speed,
+        output_mode=output_mode,
+    )
+    print(spoken_text)
+    return spoken_text
+
+
 # ---------- Main unified runner ----------
 def main(
     speaker,
@@ -387,12 +576,28 @@ def main(
 
     chosen = force_mode.lower()
     if chosen == "auto":
-        chosen = "osm" if is_osm_query(question) else "general"
+        if is_osm_query(question):
+            chosen = "osm"
+        elif is_location_general(question, lat=lat, lon=lon):
+            chosen = "place"   # new middle lane
+        else:
+            chosen = "general"
     print(f"🧭 Routed to: {chosen.upper()}")
+
 
     t3 = time.time()
     if chosen == "osm":
         out = run_osm(
+            question=question,
+            language=language,
+            speaker=speaker,
+            speed=speed,
+            output_mode=output_mode,
+            lat=lat,
+            lon=lon,
+        )
+    elif chosen == "place":
+        out = run_place_info(
             question=question,
             language=language,
             speaker=speaker,
@@ -458,7 +663,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--force-mode",
         type=str,
-        choices=["auto", "osm", "general"],
+        choices=["auto", "osm", "general", "place"],  # added "place"
         default="auto",
         help="Force routing (useful for debugging).",
     )
