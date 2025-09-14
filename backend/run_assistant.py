@@ -198,13 +198,7 @@ def run_general(
             for chunk in gen:
                 print(chunk, end="", flush=True)
                 collected.append(chunk)
-                speak(
-                    chunk,
-                    language=language,
-                    speaker_key=model_path_tts,
-                    speed=speed,
-                    output_mode="stream",
-                )
+
             print()
             response_text = "".join(collected).strip()
         else:
@@ -213,14 +207,14 @@ def run_general(
                 collected.append(chunk)
             print()
             response_text = "".join(collected).strip()
-            speak(
-                response_text,
-                language=language,
-                speaker_key=model_path_tts,
-                speed=speed,
-                output_mode="file",
-            )
-        return response_text
+
+        return speak(
+            response_text,
+            language=language,
+            speaker_key=model_path_tts,
+            speed=speed,
+            output_mode="file",
+        )
     except Exception as e:
         print(f"\n❌ BitNet inference failed: {e}")
         return ""
@@ -341,15 +335,13 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
 
     # TTS
     model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-    speak(
+    return speak(
         spoken_text,
         language=language,
         speaker_key=model_path,
         speed=speed,
         output_mode=output_mode,  # "file" or "stream"
     )
-    print(spoken_text)
-    return spoken_text
 
 
 # Add near the other intent cues:
@@ -537,15 +529,14 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
 
     # TTS
     model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-    speak(
+
+    return speak(
         spoken_text,
         language=language,
         speaker_key=model_path,
         speed=speed,
         output_mode=output_mode,
     )
-    print(spoken_text)
-    return spoken_text
 
 
 

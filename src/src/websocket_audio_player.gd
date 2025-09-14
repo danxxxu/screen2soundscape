@@ -13,7 +13,9 @@ var is_connected: bool = false
 var is_audio_ready: bool = false
 
 # WebSocket server URL
-var server_url: String = "ws://localhost:8000/ws/audio/"
+# var server_url: String = "ws://localhost:8000/ws/audio/"
+
+var server_url: String = "ws://142.93.234.209:8000/ws/audio/"
 
 # Reference to player for getting position
 var player: CharacterBody3D
