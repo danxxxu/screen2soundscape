@@ -4,7 +4,7 @@ import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from backend import run_assistant
-from utils.transcribe import transcribe_base64_audio
+from backend.utils.transcribe import transcribe_base64_audio
 
 
 class AudioStreamConsumer(AsyncWebsocketConsumer):
