@@ -359,54 +359,49 @@ _LOC_GENERAL_CUES_EN = re.compile(
     re.IGNORECASE,
 )
 
+
 def is_location_general(question: str, lat=None, lon=None) -> bool:
     q_orig = (question or "").strip()
     q_en = _to_english(q_orig)
 
-    # We only want this mode if we have *some* coords (from CLI or parse) and
-    # we don't see explicit OSM cues like "nearby/amenity/route".
+    # Only for “Where am I / tell me about here”-style questions
     has_loc_general = bool(_LOC_GENERAL_CUES_EN.search(q_en))
-    has_osmish = bool(re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en) or re.search(_OSM_TERMS_EN, q_en))
-
+    # Exclude explicit OSM/nearby/route/amenity intents
+    has_osmish = bool(
+        re.search(_NEARBY_WORDS_EN, q_en) or
+        re.search(_ROUTE_WORDS_EN, q_en) or
+        re.search(_OSM_TERMS_EN, q_en)
+    )
     if not has_loc_general or has_osmish:
         return False
 
-    # Do we have coordinates available somewhere?
-    # Prefer parse_question center; otherwise use CLI lat/lon; otherwise coords typed in question.
-    parsed = {}
-    try:
-        parsed = parse_question(q_orig) or {}
-    except Exception:
-        parsed = {}
-    center = parsed.get("center")
-    if center and all(isinstance(v, (int, float)) for v in center):
-        return True
-    if lat is not None and lon is not None:
+    # Enter PLACE mode only if we truly have coordinates (CLI or typed in text)
+    if (lat is not None and lon is not None):
         return True
     if _COORDS_RE.search(q_en):
         return True
 
     return False
 
+
 def run_place_info(question, language, speaker, speed, output_mode, lat=None, lon=None, radius_m=500):
     """
     Location-aware general handler:
-    - Reverse geocode coords to a human-readable place.
+    - Reverse geocode coords to a human-readable place (in the user's language).
     - If the question asks for history/about-here, fetch a nearby Wikipedia summary.
     - Answer in the user's language and speak it.
     """
-    # Resolve coordinates consistently
+    # Resolve coordinates from CLI or explicit coordinates in the text (no LLM, no parse_question)
     coords = None
-    try:
-        parsed = parse_question(question, lat=lat, lon=lon) or {}
-        if parsed.get("center"):
-            coords = parsed["center"]  # (lat, lon)
-    except Exception:
-        pass
-    if (coords is None) and (lat is not None and lon is not None):
+    if lat is not None and lon is not None:
         coords = (lat, lon)
+    else:
+        m = _COORDS_RE.search(_to_english(question) or "")
+        if m:
+            coords = (float(m.group(1)), float(m.group(2)))
+
+    # If no coordinates are available, fall back to general mode (don’t guess Everest)
     if coords is None:
-        # No coords → just treat as general
         return run_general(
             question=question,
             language=language,
@@ -425,12 +420,21 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
         )
 
     lat_c, lon_c = coords
-    # --- Reverse geocode via Nominatim ---
+
+    # --- Reverse geocode via Nominatim, forcing labels in the user's language ---
     try:
         headers = {"User-Agent": "screen2soundscape/1.0 (contact@example.com)"}  # set your UA/email
+        lang_short = (language or "en").split("_")[0].split("-")[0] or "en"
         r = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
-            params={"format": "jsonv2", "lat": lat_c, "lon": lon_c, "zoom": 18, "addressdetails": 1},
+            params={
+                "format": "jsonv2",
+                "lat": lat_c,
+                "lon": lon_c,
+                "zoom": 18,
+                "addressdetails": 1,
+                "accept-language": lang_short,
+            },
             headers=headers,
             timeout=10,
         )
@@ -467,7 +471,13 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
 
     # Decide if the user asked about "history/about here"
     q_en = _to_english(question)
-    wants_history = bool(re.search(r"\b(history|what happened|when was (this|here) (built|founded)|who built (this|here)|tell me about\b)", q_en, flags=re.IGNORECASE))
+    wants_history = bool(
+        re.search(
+            r"\b(history|what happened|when was (this|here) (built|founded)|who built (this|here)|tell me about\b)",
+            q_en,
+            flags=re.IGNORECASE,
+        )
+    )
 
     wiki_snippet = ""
     if wants_history:
@@ -489,26 +499,23 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
             w.raise_for_status()
             data = w.json()
             pages = list((data.get("query") or {}).get("pages", {}).values())
-            # Choose the page with the longest non-empty extract
             pages = [p for p in pages if p.get("extract")]
             if pages:
                 best = max(pages, key=lambda p: len(p.get("extract", "")))
                 title = best.get("title", "")
                 extract = best.get("extract", "")
-                # Keep it tight
                 wiki_snippet = f"{title}: {extract.strip()}"
                 if len(wiki_snippet) > 900:
                     wiki_snippet = wiki_snippet[:900].rsplit(" ", 1)[0] + "…"
         except Exception as e:
             print(f"⚠️ Wikipedia lookup failed: {e}")
 
-    # Compose response (English → then translate if needed)
+    # Compose response in English first, then translate to the question's language
     parts = []
     if re.search(r"where am i", q_en, re.IGNORECASE):
         parts.append(f"You're at {where_line}.")
         parts.append(f"Coordinates: {lat_c:.5f}, {lon_c:.5f}.")
     else:
-        # Generic “about here”
         parts.append(f"You're around {where_line} ({lat_c:.5f}, {lon_c:.5f}).")
 
     if wiki_snippet:
@@ -521,7 +528,7 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
     # Translate if needed
     lang_code = (language or "en").lower()
     spoken_text = summary_en
-    if lang_code not in ["en", "en_us", "en_newest"]:
+    if lang_code not in ["en", "en_us", "en-newest", "en_newest"]:
         try:
             spoken_text = GoogleTranslator(source="en", target=lang_code).translate(summary_en)
         except Exception as e:
@@ -539,6 +546,7 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
     )
     print(spoken_text)
     return spoken_text
+
 
 
 # ---------- Main unified runner ----------
@@ -663,7 +671,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--force-mode",
         type=str,
-        choices=["auto", "osm", "general", "place"],  # added "place"
+        choices=["auto", "osm", "general", "place"],
         default="auto",
         help="Force routing (useful for debugging).",
     )
@@ -702,30 +710,48 @@ if __name__ == "__main__":
     )
     parser.add_argument("--extra-args", type=str, nargs="*", default=None, help="Extra args passed to bitnet.cpp")
 
-    # Optional geohints for OSM
+    # Optional geohints for OSM / PLACE
     parser.add_argument("--lat", type=float, help="Latitude of the current user location")
     parser.add_argument("--lon", type=float, help="Longitude of the current user location")
 
+    # Keep the process alive to reuse the loaded model
+    parser.add_argument("--loop", action="store_true", help="Keep process alive to reuse loaded models")
+
     args = parser.parse_args()
 
-    main(
-        speaker=args.speaker,
-        language=args.language,
-        speed=args.speed,
-        text=args.text,
-        text_file=args.text_file,
-        output_mode=args.output_mode,
-        force_mode=args.force_mode,
-        save_txt=args.save_txt,
-        system_prompt=args.system_prompt,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        ctx=args.ctx,
-        threads=args.threads,
-        bitnet_bin=args.bitnet_bin,
-        bitnet_model=args.bitnet_model,
-        extra_args=args.extra_args,
-        lat=args.lat,
-        lon=args.lon,
-    )
+    def run_once(text_value: str):
+        return main(
+            speaker=args.speaker,
+            language=args.language,
+            speed=args.speed,
+            text=text_value,
+            text_file=args.text_file,
+            output_mode=args.output_mode,
+            force_mode=args.force_mode,
+            save_txt=args.save_txt,
+            system_prompt=args.system_prompt,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            ctx=args.ctx,
+            threads=args.threads,
+            bitnet_bin=args.bitnet_bin,
+            bitnet_model=args.bitnet_model,
+            extra_args=args.extra_args,
+            lat=args.lat,
+            lon=args.lon,
+        )
+
+    if args.loop:
+        current_text = args.text
+        while True:
+            try:
+                run_once(current_text)
+                # Prompt for next question (avoid reloading models)
+                current_text = input("\n> Ask another question (Enter to exit): ").strip()
+                if not current_text:
+                    break
+            except (KeyboardInterrupt, EOFError):
+                break
+    else:
+        run_once(args.text)
