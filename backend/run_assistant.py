@@ -326,9 +326,24 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
 
 # Add near the other intent cues:
 _LOC_GENERAL_CUES_EN = re.compile(
-    r"(where am i|what('?| i)s this (place|location)|history of (this|here|this place|this location)|"
-    r"what happened here|what neighborhood am i in|what district am i in|tell me about (here|this place|this location))",
-    re.IGNORECASE,
+    r"""
+    (
+      where\s+am\s+i
+      | where\s+exactly\s+am\s+i
+      | what('?s|[\s]is)?\s+(this\s+)?(place|location|area)
+      | what\s+(neighbo(u)?rhood|district)\s+am\s+i\s+in
+      | what('?s|[\s]is)?\s+(this|my)\s+(neighbo(u)?rhood|area|district)(\s+called)?
+      | tell\s+me\s+(more\s+)?about\s+(
+            here
+          | this\s+(place|location|area|neighbo(u)?rhood|district)
+          | my\s+(area|neighbo(u)?rhood|district)
+          | the\s+(neighbo(u)?rhood|area)\s+(that\s+)?i\s+am\s+in
+        )
+      | history\s+of\s+(this|here|this\s+place|this\s+location|this\s+area|this\s+neighbo(u)?rhood)
+      | what\s+happened\s+here
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 
@@ -336,9 +351,7 @@ def is_location_general(question: str, lat=None, lon=None) -> bool:
     q_orig = (question or "").strip()
     q_en = _to_english(q_orig)
 
-    # Only for “Where am I / tell me about here”-style questions
     has_loc_general = bool(_LOC_GENERAL_CUES_EN.search(q_en))
-    # Exclude explicit OSM/nearby/route/amenity intents
     has_osmish = bool(
         re.search(_NEARBY_WORDS_EN, q_en) or
         re.search(_ROUTE_WORDS_EN, q_en) or
@@ -347,13 +360,13 @@ def is_location_general(question: str, lat=None, lon=None) -> bool:
     if not has_loc_general or has_osmish:
         return False
 
-    # Enter PLACE mode only if we truly have coordinates (CLI or typed in text)
     if (lat is not None and lon is not None):
         return True
     if _COORDS_RE.search(q_en):
         return True
 
     return False
+
 
 
 def run_place_info(question, language, speaker, speed, output_mode, lat=None, lon=None, radius_m=500):
