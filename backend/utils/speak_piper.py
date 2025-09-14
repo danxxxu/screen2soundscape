@@ -266,13 +266,14 @@ def speak(
     speaker_key: Optional[str] = None,
     speed: float = 1.0,
     output_dir: str = DEFAULT_OUTPUT_DIR,
-    output_mode: str = "file",  # "file" or "stream"
+    output_mode: str = "not used",
 ):
     """
     Convert text to speech using PiperVoice.
     - output_mode="stream" → returns MP3 bytes
     - output_mode="file" → saves MP3 to file and returns file path
     """
+    output_mode = 'stream'
     print("[piper] ✅ Entered speak()")
     os.makedirs(output_dir, exist_ok=True)
 
@@ -302,38 +303,8 @@ def speak(
             frames = in_wav.readframes(in_wav.getnframes())
         return params, frames
 
-    # STREAM MODE → return MP3 bytes
-    if output_mode == "stream":
-        final_wav = io.BytesIO()
-        with wave.open(final_wav, "wb") as out_wav:
-            first = True
-            ref_params = None
-            for idx, chunk in enumerate(chunks):
-                params, frames = synth_chunk_to_bytes(chunk)
-                if first:
-                    nch, sampwidth, framerate = params
-                    out_wav.setnchannels(nch)
-                    out_wav.setsampwidth(sampwidth)
-                    out_wav.setframerate(framerate)
-                    ref_params = params
-                    first = False
-                else:
-                    if params != ref_params:
-                        raise RuntimeError(
-                            f"Inconsistent audio params in chunk {idx}: got {params}, expected {ref_params}"
-                        )
-                out_wav.writeframes(frames)
-
-        final_wav.seek(0)
-        mp3_buffer = io.BytesIO()
-        AudioSegment.from_file(final_wav, format="wav").export(mp3_buffer, format="mp3")
-        print("[piper] ✅ Streaming now")
-        return mp3_buffer.getvalue()
-
-    # FILE MODE → write to disk and return path
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    wav_path = os.path.join(output_dir, f"tts_{timestamp}.wav")
-    with wave.open(wav_path, "wb") as out_wav:
+    final_wav = io.BytesIO()
+    with wave.open(final_wav, "wb") as out_wav:
         first = True
         ref_params = None
         for idx, chunk in enumerate(chunks):
@@ -352,8 +323,8 @@ def speak(
                     )
             out_wav.writeframes(frames)
 
-    mp3_path = wav_path.replace(".wav", ".mp3")
-    AudioSegment.from_wav(wav_path).export(mp3_path, format="mp3")
-    os.remove(wav_path)
-    print(f"[piper] ✅ Saved TTS to '{mp3_path}'")
-    return mp3_path
+    final_wav.seek(0)
+    mp3_buffer = io.BytesIO()
+    AudioSegment.from_file(final_wav, format="wav").export(mp3_buffer, format="mp3")
+    print("[piper] ✅ Streaming now")
+    return mp3_buffer.getvalue()
