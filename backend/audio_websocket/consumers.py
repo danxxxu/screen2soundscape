@@ -3,7 +3,7 @@ import asyncio
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 
-from backend import run_assistant_osm, run_assistant_general
+from backend import run_assistant
 from utils.transcribe import transcribe_base64_audio
 
 
@@ -119,11 +119,27 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
                 }))
 
             # Process the message (either original text or transcribed text)
-            if message.startswith("?"):
-                message = message[1:]
-                output = run_assistant_osm.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, False, message,  None, lat=lat, lon=lon, output_mode='stream')
-            else:
-                output = run_assistant_general.main(self.DEFAULT_SPEAKER, self.DEFAULT_LANG,1.0, message, None, output_mode='stream')
+            output = run_assistant.main(
+                speaker=self.DEFAULT_SPEAKER,
+                language=self.DEFAULT_LANG,
+                speed=1.0,
+                text=message,
+                text_file=None,
+                output_mode='stream',
+                force_mode='auto',
+                save_txt=False,
+                system_prompt="You are a helpful AI assistant for everyday tasks, please always respond in the same language as the question",
+                max_new_tokens=256,
+                temperature=0.7,
+                top_p=0.95,
+                ctx=4096,
+                threads=None,
+                bitnet_bin="bitnet",
+                bitnet_model="~/screen2soundscape/backend/models/microsoft/bitnet-b1.58-2B-4T-gguf/ggml-model-q4_0.gguf",
+                extra_args=None,
+                lat=float(lat) if lat else None,
+                lon=float(lon) if lon else None,
+            )
             await self.stream_audio_bytes(output)
 
         except json.JSONDecodeError:

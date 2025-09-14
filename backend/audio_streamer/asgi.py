@@ -12,7 +12,7 @@ import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from audio_websocket import routing
+from backend.audio_websocket import routing
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'audio_streamer.settings')
 
