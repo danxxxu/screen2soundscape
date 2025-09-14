@@ -18,8 +18,8 @@ from requests.exceptions import HTTPError
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 import torch
 
-from backend.utils.osm_tags import TAG_MAP, find_osm_tags
-from backend.utils.llama_singleton import get_llm
+from utils.osm_tags import TAG_MAP, find_osm_tags
+from utils.llama_singleton import get_llm
 _llm = get_llm()  # only used for generating the Overpass QL itself
 
 # ──────────────────────────────────────────────────────────────────────────────

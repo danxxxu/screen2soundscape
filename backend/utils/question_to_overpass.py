@@ -91,7 +91,7 @@ def extract_location_bitnet(text: str) -> str:
     Use BitNet to extract the most salient named place/landmark from 'text'.
     Returns a short string like 'Times Square' (no extra words).
     """
-    from backend.utils.bitnet_singleton import chat as bitnet_chat
+    from utils.bitnet_singleton import chat as bitnet_chat
 
     system = (
         "You are a precise information extractor. "

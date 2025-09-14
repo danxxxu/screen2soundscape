@@ -24,8 +24,8 @@ from typing import List, Optional
 import requests
 from requests.exceptions import HTTPError
 
-from backend.utils.osm_tags import TAG_MAP, find_osm_tags
-from backend.utils.bitnet_singleton import chat as bitnet_chat
+from utils.osm_tags import TAG_MAP, find_osm_tags
+from utils.bitnet_singleton import chat as bitnet_chat
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 

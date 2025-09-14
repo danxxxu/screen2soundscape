@@ -16,14 +16,14 @@ os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
-from backend.utils.bitnet_singleton import stream_chat
-from backend.utils.transcribe import record_and_transcribe
-from backend.utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
+from utils.bitnet_singleton import stream_chat
+from utils.transcribe import record_and_transcribe
+from utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 
 # ---- OSM utils ----
-from backend.utils.osm_tags import find_osm_tags
-from backend.utils.question_to_overpass import parse_question, build_overpass_query
-from backend.utils.overpass_to_osm_bitnet import (
+from utils.osm_tags import find_osm_tags
+from utils.question_to_overpass import parse_question, build_overpass_query
+from utils.overpass_to_osm_bitnet import (
     run_overpass_query,
     summarize_results,
     summarize_route,
