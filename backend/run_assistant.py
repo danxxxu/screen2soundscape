@@ -113,37 +113,17 @@ def is_osm_query(question: str) -> bool:
     q_orig = (question or "").strip()
     q_en = _to_english(q_orig)
 
-    # If it *looks* like a knowledge Q (e.g., “Explain SIMD vs MIMD”), prefer GENERAL,
-    # unless there are explicit OSM/map cues.
     looks_general = bool(_GENERAL_CUES_EN.search(q_en))
-
-    # Explicit map cues from text (not from CLI lat/lon)
     has_nearby_or_route = bool(re.search(_NEARBY_WORDS_EN, q_en) or re.search(_ROUTE_WORDS_EN, q_en))
     has_coords_in_text  = bool(_COORDS_RE.search(q_en))
     has_osm_words       = bool(re.search(_OSM_TERMS_EN, q_en))
     tags_detected       = bool(find_osm_tags(q_orig) or find_osm_tags(q_en))
 
-    # Structured parse signals — EXCLUDE default center; require stronger evidence
-    parsed = {}
-    try:
-        parsed = parse_question(q_orig)
-    except Exception:
-        parsed = {}
-    strong_parse = any(
-        [
-            bool(parsed.get("tags")),
-            bool(parsed.get("bbox")),
-            parsed.get("mode") in ("route_check", "route_via"),
-            (bool(parsed.get("start_coords")) and bool(parsed.get("end_coords"))),
-        ]
-    )
-
-    # If it looks like a general knowledge query and lacks explicit map cues → GENERAL
     if looks_general and not (has_nearby_or_route or has_coords_in_text or has_osm_words or tags_detected):
         return False
 
-    # Otherwise require *some* clear OSM signal
-    return any([has_nearby_or_route, has_coords_in_text, has_osm_words, tags_detected, strong_parse])
+    return any([has_nearby_or_route, has_coords_in_text, has_osm_words, tags_detected])
+
 
 # ---------- Optional: OSRM routing ----------
 def get_directions(start, end, mode="walk"):
