@@ -86,16 +86,37 @@ def detect_and_translate(q):
         print(f"⚠️ Lang detect fail: {e}")
     return q
 
-def extract_locations_llama(text):
-    from backend.utils.llama_singleton import get_llm as load_llm
-    llm = load_llm()
-    prompt = (
-        "Extract the names of specific places or locations mentioned in the sentence.\n\n"
-        "Input: I want sushi near Times Square.\nOutput: Times Square\n"
-        f"Input: {text}\nOutput:"
+def extract_location_bitnet(text: str) -> str:
+    """
+    Use BitNet to extract the most salient named place/landmark from 'text'.
+    Returns a short string like 'Times Square' (no extra words).
+    """
+    from backend.utils.bitnet_singleton import chat as bitnet_chat
+
+    system = (
+        "You are a precise information extractor. "
+        "Return ONLY the primary real-world place or landmark mentioned. "
+        "No explanations, no quotes, no extra words."
     )
-    resp = llm(prompt, max_tokens=32, echo=False)
-    return resp["choices"][0]["text"].strip()
+    # Few-shot to anchor format
+    user = (
+        "Extract the single most likely place/landmark name.\n\n"
+        "Input: I want sushi near Times Square.\nAnswer: Times Square\n\n"
+        f"Input: {text}\nAnswer:"
+    )
+    out = bitnet_chat(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        max_new_tokens=32,
+        temperature=0.0,
+        top_p=1.0,
+    ).strip()
+
+    # Clean up: first line, strip bullets/quotes/punct
+    out = out.splitlines()[0]
+    out = re.sub(r"^[\-\*\s:>]+", "", out).strip().strip("\"'`.,;:")
+    # If model echoed "Answer:" or similar, remove it
+    out = re.sub(r"(?i)^(answer|output)\s*:\s*", "", out).strip()
+    return out
 
 # =============== Main Parser ===============
 def parse_question(raw_q, lat=None, lon=None):
@@ -113,6 +134,7 @@ def parse_question(raw_q, lat=None, lon=None):
     if "coffee" in q.lower() and "shop" in q.lower():
         P.update({"tag_key": "amenity", "tag_value": "cafe"})
 
+    # If CLI provided coords, prefer them and stop early.
     if lat is not None and lon is not None:
         P["center"] = (lat, lon)
         P["loc_source"] = "fallback_coords"
@@ -122,11 +144,13 @@ def parse_question(raw_q, lat=None, lon=None):
         print(f"🕒 parse_question took {time.time() - t0:.2f}s")
         return P
 
+    # NER/regex candidates
     candidates = [ent.text for ent in doc.ents if ent.label_ in {"GPE", "LOC", "FAC", "ORG"}]
     regex_match = re.search(r"(?:in|near|around|by)\s+(.+)", q, re.IGNORECASE)
     if regex_match:
         candidates.append(regex_match.group(1))
 
+    # Try fast geocode on the first few candidates
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
             executor.submit(geocode_point_cached, clean_name(c)): c for c in candidates[:3]
@@ -143,30 +167,34 @@ def parse_question(raw_q, lat=None, lon=None):
             except:
                 continue
 
+    # BitNet fallback extractor (replaces LLaMA)
     if not P["center"] and any(kw in q.lower() for kw in ["where", "near", "location", "places", "find"]):
         try:
-            fallback_loc = extract_locations_llama(raw_q)
-            try:
-                coords = geocode_point_cached(fallback_loc)
-                P["center"] = coords
-                P["place_name"] = fallback_loc
-                P["loc_source"] = "LLaMA"
-                print(f"🤖 LLaMA fallback: {fallback_loc} → {coords}")
-            except:
-                for suffix in [" building", " museum", " location"]:
-                    retry = fallback_loc + suffix
-                    try:
-                        coords = geocode_point_cached(retry)
-                        P["center"] = coords
-                        P["place_name"] = retry
-                        P["loc_source"] = "LLaMA (retry)"
-                        print(f"📍 Retried LLaMA location as “{retry}” → geocoded successfully")
-                        break
-                    except:
-                        continue
+            fallback_loc = extract_location_bitnet(raw_q)
+            if fallback_loc:
+                try:
+                    coords = geocode_point_cached(fallback_loc)
+                    P["center"] = coords
+                    P["place_name"] = fallback_loc
+                    P["loc_source"] = "BitNet"
+                    print(f"🤖 BitNet fallback: {fallback_loc} → {coords}")
+                except:
+                    # Gentle retries with suffixes to help geocoders
+                    for suffix in [" building", " museum", " location"]:
+                        retry = (fallback_loc + suffix).strip()
+                        try:
+                            coords = geocode_point_cached(retry)
+                            P["center"] = coords
+                            P["place_name"] = retry
+                            P["loc_source"] = "BitNet (retry)"
+                            print(f"📍 Retried BitNet location as “{retry}” → geocoded successfully")
+                            break
+                        except:
+                            continue
         except Exception as e:
-            print(f"⚠️ LLaMA extraction failed: {e}")
+            print(f"⚠️ BitNet extraction failed: {e}")
 
+    # Final fallback if nothing worked
     if not P["center"]:
         P["center"] = (27.9881, 86.9250)
         P["place_name"] = "Mount Everest"
@@ -192,21 +220,30 @@ def build_overpass_query(P):
         selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
 
     selector = " and ".join(selector_parts) if selector_parts else ""
-    # Only include brackets if there are actual selectors
     selector_brackets = f"[{selector}]" if selector else ""
 
-    # Use area if available
+    # Prefer area queries when we have a clear place name (other than user_location)
     if P.get("place_name") and P["place_name"] != "user_location":
         try:
             area_id = _osm_nominatim.query(P["place_name"]).areaId()
-            return f'[out:json][timeout:25];(node(area:{area_id}){selector_brackets};way(area:{area_id}){selector_brackets};relation(area:{area_id}){selector_brackets};);out body;'
+            return (
+                f'[out:json][timeout:25];'
+                f'(node(area:{area_id}){selector_brackets};'
+                f'way(area:{area_id}){selector_brackets};'
+                f'relation(area:{area_id}){selector_brackets};);out body;'
+            )
         except Exception as e:
             print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
 
-    # Otherwise use coordinates
+    # Otherwise use around(center, radius)
     if P.get("center") and P.get("radius"):
         lat, lon = P["center"]
         radius = P["radius"]
-        return f'[out:json][timeout:25];(node(around:{radius},{lat},{lon}){selector_brackets};way(around:{radius},{lat},{lon}){selector_brackets};relation(around:{radius},{lat},{lon}){selector_brackets};);out body;'
+        return (
+            f'[out:json][timeout:25];'
+            f'(node(around:{radius},{lat},{lon}){selector_brackets};'
+            f'way(around:{radius},{lat},{lon}){selector_brackets};'
+            f'relation(around:{radius},{lat},{lon}){selector_brackets};);out body;'
+        )
 
     raise ValueError("❌ Cannot build query: no area or coordinates available.")
