@@ -152,13 +152,32 @@ def run_general(
     bitnet_model,
     extra_args,
 ):
-    model_path_tts = find_best_piper_model(MODEL_DIR, language, speaker)
+    """
+    BitNet is run strictly in English:
+      - translate the user's question -> English
+      - force an English system prompt
+      - generate English answer with BitNet
+      - translate the English answer -> user's original language (for TTS/print)
+    """
+    # 1) Detect target/output language (the user's original language)
+    target_lang = (language or "en").lower()
 
+    # 2) Translate the incoming question to English for BitNet
+    question_en = _to_english(question)
+
+    # 3) Force an English system prompt regardless of CLI --system-prompt
+    system_prompt_en = (
+        "You are a helpful assistant. "
+        "Always answer in clear, concise English, even if the user's question is in another language."
+    )
+
+    # 4) Build messages for BitNet (English only)
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": question},
+        {"role": "system", "content": system_prompt_en},
+        {"role": "user", "content": question_en},
     ]
 
+    # 5) Run BitNet, collect the full English response
     collected = []
     try:
         gen = stream_chat(
@@ -173,31 +192,40 @@ def run_general(
             extra_args=extra_args,
         )
 
-        if output_mode == "stream":
-            print("🔊 Streaming as it generates...\n")
-            for chunk in gen:
-                print(chunk, end="", flush=True)
-                collected.append(chunk)
+        # We still print chunks live, but we do NOT TTS while streaming
+        # because we need the full text to translate first.
+        print("🔊 Generating (BitNet in EN)...\n")
+        for chunk in gen:
+            print(chunk, end="", flush=True)  # English chunks to console
+            collected.append(chunk)
+        print()
 
-            print()
-            response_text = "".join(collected).strip()
-        else:
-            for chunk in gen:
-                print(chunk, end="", flush=True)
-                collected.append(chunk)
-            print()
-            response_text = "".join(collected).strip()
+        response_en = "".join(collected).strip()
 
-        return speak(
-            response_text,
+        # 6) Translate the English answer back to the user's language (if not English)
+        response_out = response_en
+        if not target_lang.startswith("en"):
+            try:
+                response_out = GoogleTranslator(source="en", target=target_lang).translate(response_en)
+            except Exception as e:
+                print(f"⚠️ Back-translation failed ({target_lang}): {e}")
+                response_out = response_en  # fall back to English
+
+        # 7) Speak in the user's language
+        model_path_tts = find_best_piper_model(MODEL_DIR, language, speaker)
+        speak(
+            response_out,
             language=language,
             speaker_key=model_path_tts,
             speed=speed,
-            output_mode="file",
+            output_mode=output_mode,  # "stream" or "file", as requested
         )
+
+        return response_out
     except Exception as e:
         print(f"\n❌ BitNet inference failed: {e}")
         return ""
+
 
 
 def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None):
