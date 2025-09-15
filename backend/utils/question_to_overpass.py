@@ -87,23 +87,20 @@ def detect_and_translate(q):
     return q
 
 def extract_location_bitnet(text: str) -> str:
-    """
-    Use BitNet to extract the most salient named place/landmark from 'text'.
-    Returns a short string like 'Times Square' (no extra words).
-    """
     from utils.bitnet_singleton import chat as bitnet_chat
+    text_en = _to_english(text)
 
     system = (
         "You are a precise information extractor. "
-        "Return ONLY the primary real-world place or landmark mentioned. "
+        "Return ONLY the primary real-world place or landmark mentioned, in English. "
         "No explanations, no quotes, no extra words."
     )
-    # Few-shot to anchor format
     user = (
         "Extract the single most likely place/landmark name.\n\n"
         "Input: I want sushi near Times Square.\nAnswer: Times Square\n\n"
-        f"Input: {text}\nAnswer:"
+        f"Input: {text_en}\nAnswer:"
     )
+
     out = bitnet_chat(
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
         max_new_tokens=32,
@@ -111,10 +108,8 @@ def extract_location_bitnet(text: str) -> str:
         top_p=1.0,
     ).strip()
 
-    # Clean up: first line, strip bullets/quotes/punct
     out = out.splitlines()[0]
     out = re.sub(r"^[\-\*\s:>]+", "", out).strip().strip("\"'`.,;:")
-    # If model echoed "Answer:" or similar, remove it
     out = re.sub(r"(?i)^(answer|output)\s*:\s*", "", out).strip()
     return out
 
