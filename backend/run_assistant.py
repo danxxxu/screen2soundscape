@@ -213,15 +213,13 @@ def run_general(
 
         # 7) Speak in the user's language
         model_path_tts = find_best_piper_model(MODEL_DIR, language, speaker)
-        speak(
+        return speak(
             response_out,
             language=language,
             speaker_key=model_path_tts,
             speed=speed,
             output_mode=output_mode,  # "stream" or "file", as requested
         )
-
-        return response_out
     except Exception as e:
         print(f"\n❌ BitNet inference failed: {e}")
         return ""
@@ -299,8 +297,7 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
                 msg = f"❌ Failed to generate Overpass query: {e}"
                 print(msg)
                 model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-                speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
-                return msg
+                return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
         else:
             # Not a map request—guide to general mode
             msg = (
@@ -309,8 +306,7 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
             )
             print(msg)
             model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-            speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
-            return msg
+            return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
     else:
         print("🧭 Overpass query (deterministic):")
 
@@ -323,8 +319,7 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
         msg = f"Sorry, I couldn't run the map search ({e})."
         print(msg)
         model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-        speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
-        return msg
+        return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
 
     print(f"✅ Overpass returned {len(results.get('elements', []))} element(s).")
 
@@ -540,7 +535,7 @@ def run_place_info(question, language, speaker, speed, output_mode, lat=None, lo
     # TTS — guard so failures don’t swallow output
     try:
         model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-        speak(
+        return speak(
             spoken_text,
             language=language,
             speaker_key=model_path,
