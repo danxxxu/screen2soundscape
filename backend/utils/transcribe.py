@@ -19,7 +19,7 @@ _model = whisper.load_model("base")  # choose "tiny"/"small"/"medium"/"large"
 
 def _record_audio(
     max_silence: float = 5.0,
-    fs: int = 16000,
+    fs: int = 44100,
     vad_aggressiveness: int = 3,
     stop_on_enter: bool = True
 ) -> np.ndarray:
@@ -71,7 +71,7 @@ def _record_audio(
 
 def record_and_transcribe(
     max_silence: float = 5.0,
-    fs: int = 16000,
+    fs: int = 44100,
     vad_aggressiveness: int = 3,
     output_dir: str = "osm_assistant_output",
     save_audio: bool = True
@@ -166,7 +166,7 @@ def transcribe_base64_audio(base64_data: str, sample_rate: int = 44100) -> tuple
             # Create WAV file with proper header
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 # sample_rate = 110000 # hack because of low sample rate of the mic  sample_rate * 2.75 == 110000
-                
+
                 wav.write(tmp.name, sample_rate, audio_float)
                 wav_path = tmp.name
         
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     """
     args = sys.argv[1:]
     max_sil = float(args[0]) if len(args) > 0 else 5.0
-    fs = int(args[1]) if len(args) > 1 else 16000
+    fs = int(args[1]) if len(args) > 1 else 44100
     agg = int(args[2]) if len(args) > 2 else 3
     outd = args[3] if len(args) > 3 else "osm_assistant_output"
     save_a = args[4].lower() not in ("0", "false", "no") if len(args) > 4 else True

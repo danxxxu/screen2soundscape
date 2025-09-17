@@ -495,6 +495,9 @@ func send_complete_audio(audio_data: PackedByteArray):
 		var total_chunks = (base64_data.length() + max_chunk_size - 1) / max_chunk_size
 		print("Audio file too large, sending in ", total_chunks, " chunks")
 		
+		# Start new transmission for chunk tracking
+		websocket_audio_player.start_new_transmission()
+		
 		var chunk_index = 0
 		for i in range(0, base64_data.length(), max_chunk_size):
 			var end_index = min(i + max_chunk_size, base64_data.length())
