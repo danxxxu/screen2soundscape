@@ -11,20 +11,7 @@ func _ready():
 		# Clear existing children when in editor
 		for child in get_children():
 			child.queue_free()
-	# belgium
-	const location = [51.58853722988234, 4.779177373402243, 51.59037977578852, 4.78199061828104]
-	# nl
-	#const location = [51.586457, 4.772471,51.59010181869865, 4.779824262314036]
 	
-	var lat1 = location[0]
-	var lon1 = location[1]
-	var lat2 = location[2]
-	var lon2 = location[3]
-	
-	await query_buildings_from_overpass(lat1, lon1, lat2, lon2)
-	create_materials()
-	create_buildings()
-
 func _process(_delta):
 	if Engine.is_editor_hint():
 		# Update when properties change in editor
@@ -38,18 +25,11 @@ func query_buildings_with_bounds(lat1: float, lon1: float, lat2: float, lon2: fl
 	lat1, lon1: First corner of bounding box
 	lat2, lon2: Second corner of bounding box
 	"""
-	# Clear existing buildings
-	for child in get_children():
-		if child.name == "Buildings":
-			child.queue_free()
-	
-	# Clear existing data
-	building_data = {}
-	node_data = {}
 	
 	await query_buildings_from_overpass(lat1, lon1, lat2, lon2)
 	create_materials()
 	create_buildings()
+
 
 func query_buildings_from_overpass(lat1: float, lon1: float, lat2: float, lon2: float):
 	"""

@@ -6,6 +6,7 @@ var command_label: Label
 var current_place: Node3D = null 
 var player: Node3D = null
 var websocket_audio_player: Node
+var boundary_detector: BoundaryDetector
 
 func _ready():
 	command_label = Label.new()
@@ -22,6 +23,13 @@ func _ready():
 	
 	# Start WebSocket connection
 	websocket_audio_player.connect_to_server()
+	
+	# Initialize boundary detector
+	boundary_detector = Node3D.new()
+	boundary_detector.set_script(preload("res://src/boundary_detector.gd"))
+	add_child(boundary_detector)
+		
+	print("🔲 Boundary detector initialized")
 
 
 func update_command_label():
