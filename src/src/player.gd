@@ -120,14 +120,14 @@ func _ready():
 	else:
 		push_error("Could not load wall.mp3 sound file")
 		
-	# Load the houses sound
-	var houses_sound = load("res://assets/audio/houses.mp3")
-	if houses_sound:
-		houses_audio.stream = houses_sound
-		houses_audio.volume_db = -10  # Adjust volume as needed
-	else:
-		push_error("Could not load houses.mp3 sound file")
-		
+	## Load the houses sound
+	#var houses_sound = load("res://assets/audio/houses.mp3")
+	#if houses_sound:
+		#houses_audio.stream = houses_sound
+		#houses_audio.volume_db = -10  # Adjust volume as needed
+	#else:
+		#push_error("Could not load houses.mp3 sound file")
+		#
 	# Load the rotation sound
 	var rotate_sound = load("res://assets/audio/rotate.wav")
 	if rotate_sound:
@@ -174,9 +174,6 @@ func _on_body_entered(body):
 		print("Body is not in buildings group")
 
 func _on_body_exited(body):
-	#print("Body exited signal received")
-	#print("Body name: ", body.name)
-	#print("Body groups: ", body.get_groups())
 	if body.is_in_group("buildings"):
 		is_sliding = false
 		print("Exited building collision")
@@ -185,9 +182,6 @@ func _on_body_exited(body):
 		print("Body is not in buildings group")
 
 func _on_area_entered(area):
-	#print("Area entered signal received")
-	#print("Area name: ", area.name)
-	#print("Area groups: ", area.get_groups())
 	if area.is_in_group("building_proximity"):
 		print("Entered building proximity")
 		is_near_buildings = true
@@ -195,7 +189,6 @@ func _on_area_entered(area):
 		# Play houses sound when near buildings (within 10 units)
 		if not houses_audio.playing:
 			houses_audio.play()
-		# Update initial volume
 		update_houses_volume()
 	else:
 		print("Area is not in building_proximity group")

@@ -23,9 +23,9 @@ var chunk_timeout: float = 5.0  # seconds to wait before resending
 var max_retries: int = 3
 
 # WebSocket server URL
-var server_url: String = "ws://localhost:8000/ws/audio/"
+#var server_url: String = "ws://localhost:8000/ws/audio/"
 
-#var server_url: String = "ws://142.93.234.209:8000/ws/audio/"
+var server_url: String = "ws://142.93.234.209:8000/ws/audio/"
 
 # Reference to player for getting position
 var player: CharacterBody3D

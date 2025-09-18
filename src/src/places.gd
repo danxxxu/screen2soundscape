@@ -63,25 +63,17 @@ func load_places_from_overpass(lat1: float, lon1: float, lat2: float, lon2: floa
 
 				# Get name and type
 				place.name = element["tags"].get("name", "Unnamed Place")
-
-				# Determine type from tags
 				var type = "unknown"
 				var category = "unknown"
-				if element["tags"].has("amenity"):
-					type = element["tags"]["amenity"]
-					category = "amenity"
-				elif element["tags"].has("shop"):
-					type = element["tags"]["shop"]
-					category = "shop"
-				elif element["tags"].has("tourism"):
-					type = element["tags"]["tourism"]
-					category = "tourism"
-				elif element["tags"].has("leisure"):
-					type = element["tags"]["leisure"]
-					category = "leisure"
-				elif element["tags"].has("railway"):
-					type = element["tags"]["railway"]
-					category = "railway"
+				
+				for tag in OverpassAPI.TAGS:
+					var key = tag[0]
+					# Check if this element has the tag key
+					if element["tags"].has(key):
+						type = element["tags"][key]
+						category = key
+						break  # stop at the first match (like elif chain)
+
 				place.type = type
 				place.category = category
 

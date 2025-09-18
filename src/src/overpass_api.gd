@@ -2,6 +2,46 @@
 extends Node
 class_name OverpassAPI
 
+const TAGS = [
+	["amenity", "cafe"],
+	["amenity", "bank"],
+	["amenity", "bar"],
+	["amenity", "bicycle_parking"],
+	["amenity", "clinic"],
+	["amenity", "fast_food"],
+	["amenity", "hospital"],
+	["amenity", "parking_entrance"],
+	["amenity", "parking_space"],
+	["amenity", "parking_symbol"],
+	["amenity", "pharmacy"],
+	["amenity", "post_office"],
+	["amenity", "pub"],
+	["amenity", "restaurant"],
+	["amenity", "school"],
+	["amenity", "toilets"],
+	["amenity", "bus_station"],
+	["amenity", "fuel"],
+	["tourism", "attraction"],
+	["tourism", "hotel"],
+	["leisure", "park"],
+	["railway", "station"],
+	["natural", "tree"],
+	["natural", "water"],
+	["natural", "wetland"],
+	["natural", "wood"],
+	["landuse", "farmland"],
+	["landuse", "forest"],
+	["landuse", "grass"],
+	["landuse", "meadow"],
+	["landuse", "railway"],
+	["barrier", "gate"],
+	["barrier", "hedge"],
+	["barrier", "wall"],
+	["power", "generator"],
+	["power", "pole"],
+	["power", "tower"]
+]
+
 func query_buildings(lat1: float, lon1: float, lat2: float, lon2: float) -> Dictionary:
 	"""
 	Query buildings from Overpass API using real world coordinates
@@ -97,43 +137,18 @@ func query_places(lat1: float, lon1: float, lat2: float, lon2: float) -> Diction
 	
 	print("🏪 Querying Overpass API for places...")
 	print("📍 Bounding box: ", min_lat, ",", min_lon, " to ", max_lat, ",", max_lon)
-	
-	# Construct complex Overpass API query for places
 	var bbox = "(%f,%f,%f,%f)" % [min_lat, min_lon, max_lat, max_lon]
+
+	# Build the query body dynamically
+	var bodytext = ""
+	for tag in TAGS:
+		bodytext += '  node["%s"="%s"]%s;\n' % [tag[0], tag[1], bbox]
+
+	# Final Overpass query
 	var query = """[out:json][timeout:1800];
+	(%s);
+	out center 10000;""" % bodytext
 
-(
-  node["amenity"="place_of_worship"]%s;
-  node["amenity"="restaurant"]%s;
-  node["amenity"="cafe"]%s;
-  node["amenity"="bar"]%s;
-  node["amenity"="fast_food"]%s;
-  node["amenity"="pub"]%s;
-  node["amenity"="ice_cream"]%s;
-  node["amenity"="pharmacy"]%s;
-  node["amenity"="bank"]%s;
-  node["amenity"="atm"]%s;
-  node["amenity"="school"]%s;
-  node["amenity"="university"]%s;
-  node["amenity"="toilets"]%s;
-  node["amenity"="police"]%s;
-  node["amenity"="fire_station"]%s;
-  node["shop"]%s;
-  node["tourism"="hotel"]%s;
-  node["tourism"="attraction"]%s;
-  node["leisure"="park"]%s;
-  node["amenity"="post_office"]%s;
-  node["amenity"="fuel"]%s;
-  node["amenity"="bus_station"]%s;
-  node["railway"="station"]%s;
-);
-
-out center 10000;""" % [
-		bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox,
-		bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox,
-		bbox, bbox, bbox
-	]
-	
 	# Create HTTP request
 	var http_request = HTTPRequest.new()
 	add_child(http_request)

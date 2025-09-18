@@ -84,20 +84,15 @@ func _setup_place_data():
 		  "university",
 		  "unknown",
 	]
-	if place_data.type or place_data.category:
-		var type = ''
-		if place_data.type:
-			type = place_data.type
+	if place_data.type and place_data.category:
+		var type = place_data.category + "_"+ place_data.type
+		var sound_path = "res://assets/audio/places/" + type + ".mp3"
+		var sound = load(sound_path)
+		if sound:
+			ambient_player.stream = sound
+			ambient_player.play()
 		else:
-			type = place_data.category
-		if type in allowed:
-			var sound_path = "res://assets/audio/places/" + type + ".mp3"
-			var sound = load(sound_path)
-			if sound:
-				ambient_player.stream = sound
-				ambient_player.play()
-			else:
-				print("⚠️ Could not load ambient sound for type:", type, " using unknown.mp3")
+			print("⚠️ Could not load ambient sound for type:", type, " using unknown.mp3")
 
 
 	# Set the text label
