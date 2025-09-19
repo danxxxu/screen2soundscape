@@ -35,6 +35,7 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
             lat = data.get("lat")
             lon = data.get("lon")
 
+            print((lat, lon))
             # Handle audio data type
             if message_type == "audio_chunk":
                 # Handle chunked audio data

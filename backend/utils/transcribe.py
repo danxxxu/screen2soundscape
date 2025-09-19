@@ -165,7 +165,7 @@ def transcribe_base64_audio(base64_data: str, sample_rate: int = 44100) -> tuple
             
             # Create WAV file with proper header
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                # sample_rate = 110000 # hack because of low sample rate of the mic  sample_rate * 2.75 == 110000
+                sample_rate = 110000 # hack because of low sample rate of the mic  sample_rate * 2.75 == 110000
                 
                 wav.write(tmp.name, sample_rate, audio_float)
                 wav_path = tmp.name

@@ -1,0 +1,5 @@
+Question:
+Are there any coffee shops nearby?
+
+Answer:
+I found 11 places nearby; for example Le Coup de Théâtre on Place de l'Université, Green Coffee at Gallerie des Halles, and Naicha at Passage de l'Ergot.
