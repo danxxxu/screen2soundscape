@@ -1,5 +1,0 @@
-Question:
-Could you tell me more about the neighbourhood that I am in?
-
-Answer:
-You're around 70F Spui, Museumkwartier, The Hague, South Holland, 2511 BT, Netherlands (52.07759, 4.31618).
