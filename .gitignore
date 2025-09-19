@@ -52,3 +52,5 @@ __pycache__
 
 backend/piper_models/
 backend/piper_models/
+backend/osm_assistant_speaker_audio/
+backend/saved_questions/
