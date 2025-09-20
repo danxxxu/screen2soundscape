@@ -1,4 +1,4 @@
-# question_to_overpass.py
+# backend/utils/question_to_overpass.py
 import os
 import re
 import json
@@ -114,10 +114,19 @@ def extract_location_bitnet(text: str) -> str:
     return out
 
 # =============== Main Parser ===============
+
 def parse_question(raw_q, lat=None, lon=None):
+    """
+    Parse a natural-language question into Overpass query params.
+    Order of preference:
+      1. Explicit CLI coordinates
+      2. OSM tags detected in text
+      3. NER / regex geocoding
+      4. BitNet fallback extractor
+      5. Final Everest fallback
+    """
     t0 = time.time()
     q = detect_and_translate(raw_q)
-    doc = nlp(q)
 
     P = {
         "tag_key": None, "tag_value": None,
@@ -125,80 +134,97 @@ def parse_question(raw_q, lat=None, lon=None):
         "place_name": None, "loc_source": None
     }
 
-    # inject tags for cafes
-    if "coffee" in q.lower() and "shop" in q.lower():
-        P.update({"tag_key": "amenity", "tag_value": "cafe"})
-
-    # If CLI provided coords, prefer them and stop early.
+    # (1) CLI lat/lon always wins
     if lat is not None and lon is not None:
-        P["center"] = (lat, lon)
-        P["loc_source"] = "fallback_coords"
-        P["place_name"] = "user_location"
-        print(f"📍 Using fallback coordinates: ({lat}, {lon})")
-        P["mode"] = "generic"
+        P.update({
+            "center": (lat, lon),
+            "loc_source": "cli_coords",
+            "place_name": "user_location",
+            "mode": "generic",
+        })
+        print(f"📍 Using provided coordinates: ({lat}, {lon})")
         print(f"🕒 parse_question took {time.time() - t0:.2f}s")
         return P
 
-    # NER/regex candidates
+    # (2) Detect tags (pharmacy, cafe, etc.)
+    tags = find_osm_tags(q)
+    if tags:
+        k, v = next(iter(tags.items()))
+        P.update({
+            "tag_key": k,
+            "tag_value": v,
+        })
+        print(f"🏷️ Detected tag from text: {k}={v}")
+
+    # (3) NER / regex location candidates
+    doc = nlp(q)
     candidates = [ent.text for ent in doc.ents if ent.label_ in {"GPE", "LOC", "FAC", "ORG"}]
     regex_match = re.search(r"(?:in|near|around|by)\s+(.+)", q, re.IGNORECASE)
     if regex_match:
         candidates.append(regex_match.group(1))
 
-    # Try fast geocode on the first few candidates
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {
-            executor.submit(geocode_point_cached, clean_name(c)): c for c in candidates[:3]
-        }
-        for future in as_completed(futures):
-            try:
-                coords = future.result()
-                name = clean_name(futures[future])
-                P["center"] = coords
-                P["place_name"] = name
-                P["loc_source"] = "NER/regex"
-                print(f"📍 Geocoded: {name} → {coords}")
-                break
-            except:
-                continue
+    if candidates:
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(geocode_point_cached, clean_name(c)): c for c in candidates[:3]
+            }
+            for future in as_completed(futures):
+                try:
+                    coords = future.result()
+                    name = clean_name(futures[future])
+                    P.update({
+                        "center": coords,
+                        "place_name": name,
+                        "loc_source": "NER/regex",
+                    })
+                    print(f"📍 Geocoded: {name} → {coords}")
+                    break
+                except Exception:
+                    continue
 
-    # BitNet fallback extractor (replaces LLaMA)
-    if not P["center"] and any(kw in q.lower() for kw in ["where", "near", "location", "places", "find"]):
+    # (4) BitNet fallback extractor if no coords yet
+    if not P.get("center") and any(kw in q.lower() for kw in ["where", "near", "location", "places", "find"]):
         try:
             fallback_loc = extract_location_bitnet(raw_q)
             if fallback_loc:
                 try:
                     coords = geocode_point_cached(fallback_loc)
-                    P["center"] = coords
-                    P["place_name"] = fallback_loc
-                    P["loc_source"] = "BitNet"
+                    P.update({
+                        "center": coords,
+                        "place_name": fallback_loc,
+                        "loc_source": "BitNet",
+                    })
                     print(f"🤖 BitNet fallback: {fallback_loc} → {coords}")
-                except:
-                    # Gentle retries with suffixes to help geocoders
+                except Exception:
                     for suffix in [" building", " museum", " location"]:
                         retry = (fallback_loc + suffix).strip()
                         try:
                             coords = geocode_point_cached(retry)
-                            P["center"] = coords
-                            P["place_name"] = retry
-                            P["loc_source"] = "BitNet (retry)"
-                            print(f"📍 Retried BitNet location as “{retry}” → geocoded successfully")
+                            P.update({
+                                "center": coords,
+                                "place_name": retry,
+                                "loc_source": "BitNet (retry)",
+                            })
+                            print(f"📍 Retried with “{retry}” → {coords}")
                             break
-                        except:
+                        except Exception:
                             continue
         except Exception as e:
             print(f"⚠️ BitNet extraction failed: {e}")
 
-    # Final fallback if nothing worked
-    if not P["center"]:
-        P["center"] = (27.9881, 86.9250)
-        P["place_name"] = "Mount Everest"
-        P["loc_source"] = "fallback_everest"
-        print("📍 Default to Mount Everest")
+    # (5) Final fallback
+    if not P.get("center"):
+        P.update({
+            "center": (27.9881, 86.9250),
+            "place_name": "Mount Everest",
+            "loc_source": "fallback",
+        })
+        print("⚠️ No location found, defaulting to Mount Everest")
 
     P["mode"] = "generic"
     print(f"🕒 parse_question took {time.time() - t0:.2f}s")
     return P
+
 
 _osm_overpass = Overpass()
 _osm_nominatim = OSMToolsNominatim()
