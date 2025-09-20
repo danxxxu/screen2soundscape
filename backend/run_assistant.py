@@ -645,7 +645,9 @@ def main(
                 f.write("Question:\n")
                 f.write((question or "").strip() + "\n\n")
                 f.write("Answer:\n")
-                f.write((out or "").strip() + "\n")
+                out_str = out.decode("utf-8") if isinstance(out, bytes) else str(out)
+                f.write(out_str.strip() + "\n")
+
             print(f"📝 Saved Q&A to {path.as_posix()}")
         except Exception as e:
             print(f"⚠️ Failed to save Q&A: {e}")
