@@ -88,6 +88,12 @@ _UNCOUNTABLE = {
     "wc",
 }
 
+_IRREGULAR_PLURALS = {
+    "pharmacy": ["pharmacy", "pharmacies"],
+    "bus": ["bus", "buses"],
+    "tooth": ["tooth", "teeth"],
+}
+
 
 def _plural_variants(word: str) -> list[str]:
     """Return [singular, plural] variants for a single word."""
@@ -133,6 +139,11 @@ def _phrase_regex_with_plural(key: str) -> str:
     # If the phrase is uncountable, match exactly (word boundaries + flexible whitespace)
     if key in _UNCOUNTABLE:
         esc = r"\s+".join(re.escape(tok) for tok in tokens)
+        return rf"\b{esc}\b"
+
+    if key in _IRREGULAR_PLURALS:
+        variants = _IRREGULAR_PLURALS[key]
+        esc = r"(?:%s)" % "|".join(re.escape(v) for v in variants)
         return rf"\b{esc}\b"
 
     # Otherwise pluralize only the last token
