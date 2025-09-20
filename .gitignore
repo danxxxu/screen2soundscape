@@ -54,3 +54,40 @@ backend/piper_models/
 backend/piper_models/
 backend/osm_assistant_speaker_audio/
 backend/saved_questions/
+# outputs / caches / venv / models
+backend/osm_assistant_speaker_audio/
+backend/saved_questions/
+cache/
+models/
+s2svenc/
+saved_questions/
+geocode_cache.json
+
+# python cruft
+__pycache__/
+*.pyc
+
+# media + model blobs (belt & suspenders)
+*.mp3
+*.wav
+*.gguf
+*.pth
+*.pt
+*.onnx
+*.bin
+/s2svenc/
+/models/
+/cache/
+/saved_questions/
+/backend/osm_assistant_speaker_audio/
+backend/saved_questions/
+geocode_cache.json
+__pycache__/
+*.pyc
+*.mp3
+*.wav
+*.bin
+*.pt
+*.pth
+*.onnx
+*.gguf
