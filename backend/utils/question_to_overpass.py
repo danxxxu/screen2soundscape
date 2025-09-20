@@ -108,28 +108,69 @@ def _norm(s: str) -> str:
     return s
 
 @lru_cache()
-def _load_values_index(data_path: str = "../osm_tags/tag_values/all_osm_tags.json") -> Dict[str, set]:
+def _load_values_index(data_path: str | None = None) -> dict[str, set]:
     """
-    Load your combined tag-values JSON produced by your fetcher.
-    Keeps only POI-ish keys to reduce noise.
+    Load the combined tag-values JSON (all_osm_tags.json).
+    Tries, in order:
+      1) explicit data_path arg (if given)
+      2) $OSM_TAG_VALUES_PATH env var (absolute or relative)
+      3) paths relative to this file and to the repo root:
+         - ../osm_tags/tag_values/all_osm_tags.json
+         - ./osm_tags/tag_values/all_osm_tags.json
+         - ./backend/../osm_tags/tag_values/all_osm_tags.json
+    Returns {key: set(values)} for allowed keys.
     """
-    path = data_path
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Missing tag-values JSON at {path} — run your fetcher first.")
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    allowed = {"amenity","shop","tourism","leisure","healthcare","craft","office","natural","highway"}
-    return {k: set(vs) for k, vs in data.items() if k in allowed and isinstance(vs, list)}
+    here = Path(__file__).resolve().parent
+    repo = here.parent  # backend/
+    candidates: list[Path] = []
 
-def resolve_tag_from_values(phrase: str, threshold: int = 60) -> Optional[Tuple[str, str, int]]:
-    """
-    Map a natural phrase to (key, value, score) by fuzzy matching against known OSM values (data-driven).
-    Returns None if nothing crosses threshold.
-    """
+    # 1) explicit param
+    if data_path:
+        candidates.append(Path(data_path))
+
+    # 2) env override
+    if OSM_TAG_VALUES_ENV:
+        candidates.append(Path(OSM_TAG_VALUES_ENV))
+
+    # 3) common relative locations
+    candidates.extend([
+        here / "../osm_tags/tag_values/all_osm_tags.json",       # e.g. backend/../osm_tags/...
+        here / "osm_tags/tag_values/all_osm_tags.json",          # e.g. backend/osm_tags/...
+        repo / "osm_tags/tag_values/all_osm_tags.json",          # e.g. <repo>/osm_tags/...
+    ])
+
+    chosen: Path | None = None
+    for c in candidates:
+        try:
+            p = c.resolve()
+        except Exception:
+            p = c
+        if p.exists():
+            chosen = p
+            break
+
+    if not chosen:
+        raise FileNotFoundError(
+            "Missing tag-values JSON (all_osm_tags.json). "
+            "Tried: " + ", ".join(str(c) for c in candidates)
+            + "\nSet OSM_TAG_VALUES_PATH or pass data_path to resolve_tag_from_values()."
+        )
+
+    # Load and filter allowed keys
+    with open(chosen, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    allowed = {"amenity", "shop", "tourism", "leisure", "healthcare", "craft", "office", "natural", "highway"}
+    idx = {k: set(vs) for k, vs in data.items() if k in allowed and isinstance(vs, list)}
+
+    print(f"🔎 Using tag-values file: {chosen}")  # helpful once; cached after
+    return idx
+
+def resolve_tag_from_values(phrase: str, threshold: int = 60, data_path: str | None = None):
     phrase_n = _norm(phrase)
     if not phrase_n:
         return None
-    idx = _load_values_index()
+    idx = _load_values_index(data_path)
 
     best = ("", "", -1)
     for key, values in idx.items():
