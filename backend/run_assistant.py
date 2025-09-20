@@ -22,6 +22,7 @@ from utils.speak_piper import speak, find_best_piper_model, MODEL_DIR
 
 # ---- OSM utils ----
 from utils.osm_tags import find_osm_tags
+from utils.overpass_helpers import top_k_nearest
 from utils.question_to_overpass import parse_question, build_overpass_query
 from utils.overpass_to_osm_bitnet import (
     run_overpass_query,
@@ -224,123 +225,109 @@ def run_general(
         print(f"\n❌ BitNet inference failed: {e}")
         return ""
 
-
-
-def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None):
+def run_osm(
+    question,
+    language,
+    speaker,
+    speed,
+    output_mode,
+    lat=None,
+    lon=None,
+    radius_m=1000,     # NEW: CLI-tunable
+    out_limit=300,     # NEW: Overpass row cap
+    k_nearest=5,       # NEW: how many to report
+):
     """
     Robust OSM handler:
-    - parse question (lat/lon are just hints; they DO NOT force OSM intent)
-    - optional routing summary
-    - build deterministic Overpass QL; if invalid AND text clearly looks map-ish, use BitNet fallback
-    - run Overpass; summarize; translate; TTS
-    - on any API/build failure, speak a friendly message instead of crashing
+    - parse question → set radius/out_limit from CLI
+    - build Overpass (with guardrails and 'out tags center qt')
+    - run Overpass
+    - pick top-K nearest by great-circle distance
+    - speak concise summary
     """
-    # --- local helpers (kept inside to make this function fully drop-in) ---
-    def _looks_invalid_overpass(q: str) -> bool:
-        if not q or not q.strip():
-            return True
-        if "area:None" in q or "(area:None)" in q:
-            return True
-        if re.search(r"\bNone\b", q):
-            return True
-        return False
-
-    def _text_has_map_intent(q: str) -> bool:
-        # Use English for regex cues; tags check both original and translated
-        q_en = _to_english(q)
-        return any([
-            bool(find_osm_tags(q) or find_osm_tags(q_en)),
-            bool(re.search(_NEARBY_WORDS_EN, q_en)),
-            bool(re.search(_ROUTE_WORDS_EN, q_en)),
-            bool(re.search(_OSM_TERMS_EN, q_en)),
-            bool(_COORDS_RE.search(q_en)),
-        ])
-
-    # Parse → (optional) route → Overpass → Summarize → Translate → TTS
-    print("Hi!")
+    # ---- Parse → params ----
     params = parse_question(question, lat=lat, lon=lon)
+    # override default radius / cap from CLI
+    try:
+        params["radius"] = int(radius_m)
+    except Exception:
+        params["radius"] = params.get("radius", 1000)
+    try:
+        params["out_limit"] = int(out_limit)
+    except Exception:
+        params["out_limit"] = 300
 
-    # Optional routing summary
-    if params.get("mode") in ("route_check", "route_via"):
-        try:
-            directions = get_directions(params["start_coords"], params["end_coords"])
-            route_summary = summarize_route(directions)
-            print("🗺️ Route summary:")
-            print(route_summary)
-        except Exception as e:
-            print(f"⚠️ Routing failed: {e}")
-
-    # Build Overpass QL (deterministic builder first)
+    # ---- Build query (deterministic builder first) ----
     overpass_query = ""
     try:
         overpass_query = build_overpass_query(params)
+        print("🧭 Overpass query (deterministic):")
+        print(overpass_query)
     except Exception as e:
         print(f"⚠️ build_overpass_query failed: {e}")
-
-    # If invalid, only try BitNet QL when the *text* looks like a map request
-    if _looks_invalid_overpass(overpass_query):
-        if _text_has_map_intent(question):
-            # pick best center we know about
+        # If it still looks like a map request, try BitNet fallback
+        try:
             clat, clon = None, None
             if params.get("center"):
                 clat, clon = params["center"]
             elif lat is not None and lon is not None:
                 clat, clon = (lat, lon)
-            try:
-                overpass_query = generate_overpass_query(
-                    question,
-                    lat=clat,
-                    lon=clon,
-                    radius=params.get("radius", 2000),
-                )
-                print("🧭 Overpass query (BitNet fallback):")
-            except Exception as e:
-                msg = f"❌ Failed to generate Overpass query: {e}"
-                print(msg)
-                model_path = find_best_piper_model(MODEL_DIR, language, speaker)
-                return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
-        else:
-            # Not a map request—guide to general mode
-            msg = (
-                "This doesn’t look like a map request. "
-                "Re-run with --force-mode general for a regular answer."
+            overpass_query = generate_overpass_query(
+                question,
+                lat=clat,
+                lon=clon,
+                radius=params.get("radius", 2000),
             )
+            print("🧭 Overpass query (BitNet fallback):")
+            print(overpass_query)
+        except Exception as e2:
+            msg = f"❌ Failed to generate Overpass query: {e2}"
             print(msg)
             model_path = find_best_piper_model(MODEL_DIR, language, speaker)
             return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
-    else:
-        print("🧭 Overpass query (deterministic):")
 
-    print(overpass_query)
-
-    # Run Overpass safely
+    # ---- Run Overpass ----
     try:
         results = run_overpass_query(overpass_query)
-        elements = results.get("elements", [])
-        lat0, lon0 = params["center"]
-        nearest5 = top_k_nearest(elements, lat0, lon0, k=5)
     except Exception as e:
         msg = f"Sorry, I couldn't run the map search ({e})."
         print(msg)
         model_path = find_best_piper_model(MODEL_DIR, language, speaker)
         return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
 
-    print(f"✅ Overpass returned {len(results.get('elements', []))} element(s).")
+    elements = results.get("elements", [])
+    print(f"✅ Overpass returned {len(elements)} element(s).")
 
-    # Summarize (English)
-    summary_en = summarize_results(question, results)
+    # ---- Compute nearest K (fast heap), requires 'center' coords and 'out ... center' ----
+    if not params.get("center"):
+        msg = "I couldn't determine your location to rank by distance."
+        print(msg)
+        model_path = find_best_piper_model(MODEL_DIR, language, speaker)
+        return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
 
-    # Translate if needed
-    lang_code = (language or "en").lower()
-    spoken_text = summary_en
-    if lang_code not in ["en", "en_us", "en_newest"]:
-        try:
-            spoken_text = GoogleTranslator(source="en", target=lang_code).translate(summary_en)
-        except Exception as e:
-            print(f"⚠️ Translation failed ({lang_code}): {e}")
-            spoken_text = summary_en
+    lat0, lon0 = params["center"]
+    nearest = top_k_nearest(elements, lat0, lon0, k=k_nearest)
 
-    # TTS
+    # ---- Build concise spoken summary ----
+    if not nearest:
+        spoken_text = "I didn't find any matching places nearby."
+    else:
+        lines = []
+        for i, item in enumerate(nearest, 1):
+            tags = item.get("tags", {}) or {}
+            name = tags.get("name") or "Unnamed"
+            dist = int(round(item.get("distance_m", 0)))
+            # add a tiny hint for the POI type if known
+            kind = None
+            if "amenity" in tags:
+                kind = tags["amenity"]
+            elif "shop" in tags:
+                kind = tags["shop"]
+            kind_str = f" ({kind})" if kind else ""
+            lines.append(f"{i}. {name}{kind_str} — {dist} meters away.")
+        spoken_text = "Here are the closest places: " + " ".join(lines)
+
+    # ---- TTS ----
     model_path = find_best_piper_model(MODEL_DIR, language, speaker)
     return speak(
         spoken_text,
@@ -575,6 +562,9 @@ def main(
     extra_args,
     lat,
     lon,
+    radius_m,     # NEW
+    out_limit,    # NEW
+    k_nearest,    # NEW
 ):
     print("🕒 Step 1: Getting question...")
     t1 = time.time()
@@ -592,11 +582,10 @@ def main(
         if is_osm_query(question):
             chosen = "osm"
         elif is_location_general(question, lat=lat, lon=lon):
-            chosen = "place"   # new middle lane
+            chosen = "place"
         else:
             chosen = "general"
     print(f"🧭 Routed to: {chosen.upper()}")
-
 
     t3 = time.time()
     if chosen == "osm":
@@ -608,6 +597,9 @@ def main(
             output_mode=output_mode,
             lat=lat,
             lon=lon,
+            radius_m=radius_m,     # pass through
+            out_limit=out_limit,   # pass through
+            k_nearest=k_nearest,   # pass through
         )
     elif chosen == "place":
         out = run_place_info(
@@ -639,6 +631,7 @@ def main(
     t4 = time.time()
     print(f"\n🎉 Completed in {t4 - t1:.2f} s (handler: {t4 - t3:.2f} s).")
 
+    # Safe text save (don’t try to decode audio bytes)
     if save_txt:
         try:
             ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -649,9 +642,10 @@ def main(
                 f.write("Question:\n")
                 f.write((question or "").strip() + "\n\n")
                 f.write("Answer:\n")
-                out_str = out.decode("utf-8") if isinstance(out, bytes) else str(out)
-                f.write(out_str.strip() + "\n")
-
+                if isinstance(out, (bytes, bytearray)):
+                    f.write("[Audio output]\n")
+                else:
+                    f.write((str(out) or "").strip() + "\n")
             print(f"📝 Saved Q&A to {path.as_posix()}")
         except Exception as e:
             print(f"⚠️ Failed to save Q&A: {e}")
