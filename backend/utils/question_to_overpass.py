@@ -1,4 +1,4 @@
-# backend/utils/question_to_overpass.py
+# utils/question_to_overpass.py
 import os
 import re
 import json
@@ -6,259 +6,273 @@ import string
 import time
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from geopy.geocoders import Nominatim
+from typing import Dict, Optional, Tuple
+
+from geopy.geocoders import Nominatim as GeopyNominatim
 from langdetect import detect
 from deep_translator import GoogleTranslator
-from geoparser import Geoparser
+
+# Optional, used only for (rare) landmark extraction
+try:
+    from geoparser import Geoparser
+    _GEOPARSER = Geoparser()
+except Exception:
+    _GEOPARSER = None
+
+# OSMPythonTools for areaId() and Overpass wrapper (we only use areaId here)
 from OSMPythonTools.overpass import Overpass, overpassQueryBuilder
 from OSMPythonTools.nominatim import Nominatim as OSMToolsNominatim
-from utils.osm_value_resolver import resolve_tag_from_values
 
-# =============== Global NLP ===============
+# ========= Embedding / NLP (lazy) =========
 @lru_cache()
-def get_nlp():
-    import spacy
-    return spacy.load("en_core_web_sm")
-
-nlp = get_nlp()
-geoparser = Geoparser()
-
-# =============== Geocoding ===============
-@lru_cache()
-def shared_nominatim():
-    return Nominatim(user_agent="osmv", timeout=5)
-
-GEOCODE_CACHE_FILE = "geocode_cache.json"
-if os.path.exists(GEOCODE_CACHE_FILE):
-    with open(GEOCODE_CACHE_FILE, "r", encoding="utf-8") as f:
-        GEOCODE_CACHE = json.load(f)
-else:
-    GEOCODE_CACHE = {}
-
-def save_geocode_cache():
-    with open(GEOCODE_CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(GEOCODE_CACHE, f)
-
-@lru_cache(maxsize=300)
-def geocode_point_cached(loc):
-    key = loc.strip().lower()
-    if key in GEOCODE_CACHE:
-        return tuple(GEOCODE_CACHE[key])
-    geo = shared_nominatim()
-    place = geo.geocode(loc, exactly_one=True)
-    if not place:
-        raise ValueError(f"Could not geocode: {loc}")
-    coords = (place.latitude, place.longitude)
-    GEOCODE_CACHE[key] = coords
-    save_geocode_cache()
-    return coords
-
-@lru_cache(maxsize=200)
-def geocode_point(loc):
-    geo = shared_nominatim()
-    place = geo.geocode(loc, exactly_one=True)
-    if not place:
-        raise ValueError(f"Could not geocode: {loc}")
-    return place.latitude, place.longitude
-
-# =============== Helpers ===============
-DEFAULT_RADIUS = 1000
-CUISINE_KEYWORDS = [
-    "chinese", "italian", "japanese", "indian", "thai", "mexican", "greek", "french",
-    "vietnamese", "turkish", "korean", "lebanese", "ethiopian", "burger", "pizza",
-    "vegetarian", "vegan", "halal", "kosher"
-]
-
-STOPWORDS = {"is","a","an","the","in","on","at","of","to","from","with","for","near","by"}
-
-def clean_name(n):
-    return n.strip().strip(string.punctuation)
-
-def detect_and_translate(q):
+def _get_nlp():
     try:
-        if all(ord(c) < 128 for c in q):
-            return q
-        lang = detect(q)
-        if lang != "en":
-            t = GoogleTranslator(source=lang, target="en").translate(q)
-            print(f"\U0001F30D {lang} → EN: {q!r} → {t!r}")
-            return t
-    except Exception as e:
-        print(f"⚠️ Lang detect fail: {e}")
-    return q
+        import spacy
+        return spacy.load("en_core_web_sm")
+    except Exception:
+        return None
 
-def extract_location_bitnet(text: str) -> str:
-    from utils.bitnet_singleton import chat as bitnet_chat
-    text_en = _to_english(text)
-
-    system = (
-        "You are a precise information extractor. "
-        "Return ONLY the primary real-world place or landmark mentioned, in English. "
-        "No explanations, no quotes, no extra words."
-    )
-    user = (
-        "Extract the single most likely place/landmark name.\n\n"
-        "Input: I want sushi near Times Square.\nAnswer: Times Square\n\n"
-        f"Input: {text_en}\nAnswer:"
-    )
-
-    out = bitnet_chat(
-        [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        max_new_tokens=32,
-        temperature=0.0,
-        top_p=1.0,
-    ).strip()
-
-    out = out.splitlines()[0]
-    out = re.sub(r"^[\-\*\s:>]+", "", out).strip().strip("\"'`.,;:")
-    out = re.sub(r"(?i)^(answer|output)\s*:\s*", "", out).strip()
-    return out
-
-# =============== Main Parser ===============
-
-def parse_question(raw_q, lat=None, lon=None):
-    """
-    Parse a natural-language question into Overpass query params.
-    Order of preference:
-      1. Explicit CLI coordinates
-      2. OSM tags detected in text
-      3. NER / regex geocoding
-      4. BitNet fallback extractor
-      5. Final Everest fallback
-    """
-    t0 = time.time()
-    q = detect_and_translate(raw_q)
-
-    P = {
-        "tag_key": None, "tag_value": None,
-        "mode": None, "center": None, "radius": DEFAULT_RADIUS,
-        "place_name": None, "loc_source": None
-    }
-
-    # (1) CLI lat/lon always wins
-    if lat is not None and lon is not None:
-        P.update({
-            "center": (lat, lon),
-            "loc_source": "cli_coords",
-            "place_name": "user_location",
-            "mode": "generic",
-        })
-        print(f"📍 Using provided coordinates: ({lat}, {lon})")
-        print(f"🕒 parse_question took {time.time() - t0:.2f}s")
-        return P
-
-    # (2) Detect tags (pharmacy, cafe, etc.)
-    tags = find_osm_tags(q)
-    if not tags:
-        # 🔁 Data-driven fallback using your OSM values cache (no hardcoding)
-        try:
-            r = resolve_tag_from_values(q)  # or use raw_q if you prefer
-            if r:
-                k, v, score = r
-                tags = {k: v}
-                print(f"🏷️ Fallback tag from values: {k}={v} (score={score})")
-        except Exception as e:
-            print(f"⚠️ Value resolver failed: {e}")
-
-    if tags:
-        k, v = next(iter(tags.items()))
-        P.update({"tag_key": k, "tag_value": v})
-        print(f"🏷️ Detected tag from text: {k}={v}")
-
-    # (3) NER / regex location candidates
-    doc = nlp(q)
-    candidates = [ent.text for ent in doc.ents if ent.label_ in {"GPE", "LOC", "FAC", "ORG"}]
-    regex_match = re.search(r"(?:in|near|around|by)\s+(.+)", q, re.IGNORECASE)
-    if regex_match:
-        candidates.append(regex_match.group(1))
-
-    if candidates:
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {
-                executor.submit(geocode_point_cached, clean_name(c)): c for c in candidates[:3]
-            }
-            for future in as_completed(futures):
-                try:
-                    coords = future.result()
-                    name = clean_name(futures[future])
-                    P.update({
-                        "center": coords,
-                        "place_name": name,
-                        "loc_source": "NER/regex",
-                    })
-                    print(f"📍 Geocoded: {name} → {coords}")
-                    break
-                except Exception:
-                    continue
-
-    # (4) BitNet fallback extractor if no coords yet
-    if not P.get("center") and any(kw in q.lower() for kw in ["where", "near", "location", "places", "find"]):
-        try:
-            fallback_loc = extract_location_bitnet(raw_q)
-            if fallback_loc:
-                try:
-                    coords = geocode_point_cached(fallback_loc)
-                    P.update({
-                        "center": coords,
-                        "place_name": fallback_loc,
-                        "loc_source": "BitNet",
-                    })
-                    print(f"🤖 BitNet fallback: {fallback_loc} → {coords}")
-                except Exception:
-                    for suffix in [" building", " museum", " location"]:
-                        retry = (fallback_loc + suffix).strip()
-                        try:
-                            coords = geocode_point_cached(retry)
-                            P.update({
-                                "center": coords,
-                                "place_name": retry,
-                                "loc_source": "BitNet (retry)",
-                            })
-                            print(f"📍 Retried with “{retry}” → {coords}")
-                            break
-                        except Exception:
-                            continue
-        except Exception as e:
-            print(f"⚠️ BitNet extraction failed: {e}")
-
-    # (5) Final fallback
-    if not P.get("center"):
-        P.update({
-            "center": (27.9881, 86.9250),
-            "place_name": "Mount Everest",
-            "loc_source": "fallback",
-        })
-        print("⚠️ No location found, defaulting to Mount Everest")
-
-    P["mode"] = "generic"
-    print(f"🕒 parse_question took {time.time() - t0:.2f}s")
-    return P
-
-
+# ========= Overpass / Nominatim singletons =========
 _osm_overpass = Overpass()
 _osm_nominatim = OSMToolsNominatim()
 
-def build_overpass_query(P):
-    """
-    Build an Overpass QL query from parsed params P.
+# ========= Geocoding (Geopy) =========
+@lru_cache()
+def _shared_nominatim():
+    return GeopyNominatim(user_agent="screen2soundscape/1.0", timeout=6)
 
-    Expected P keys:
-      - tag_key, tag_value            -> primary (key,value) selector
-      - wheelchair_only (bool)        -> adds wheelchair=yes
-      - pet_friendly (bool)           -> adds pets=yes
-      - opening_hours_regex (str)     -> adds opening_hours~"..."
-      - place_name (str)              -> if not "user_location", try areaId()
-      - center (lat, lon)             -> for around: queries
-      - radius (int, meters)          -> search radius (will be clamped)
+_GEOCODE_CACHE_FILE = "geocode_cache.json"
+if os.path.exists(_GEOCODE_CACHE_FILE):
+    with open(_GEOCODE_CACHE_FILE, "r", encoding="utf-8") as _f:
+        _GEOCODE_CACHE = json.load(_f)
+else:
+    _GEOCODE_CACHE = {}
+
+def _save_geocode_cache():
+    with open(_GEOCODE_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(_GEOCODE_CACHE, f)
+
+@lru_cache(maxsize=300)
+def geocode_point_cached(loc: str) -> Tuple[float, float]:
+    key = (loc or "").strip().lower()
+    if not key:
+        raise ValueError("Empty location")
+    if key in _GEOCODE_CACHE:
+        lat, lon = _GEOCODE_CACHE[key]
+        return float(lat), float(lon)
+    geo = _shared_nominatim()
+    place = geo.geocode(loc, exactly_one=True)
+    if not place:
+        raise ValueError(f"Could not geocode: {loc}")
+    coords = (float(place.latitude), float(place.longitude))
+    _GEOCODE_CACHE[key] = coords
+    _save_geocode_cache()
+    return coords
+
+# ========= Language utils =========
+def detect_and_translate(q: str) -> str:
     """
-    # --- helper to append filters safely ---
+    If non-ASCII and non-English, translate to English; otherwise return original.
+    Keeps your previous behavior.
+    """
+    try:
+        if all(ord(c) < 128 for c in (q or "")):
+            return q
+        lang = detect(q or "")
+        if lang and lang != "en":
+            t = GoogleTranslator(source=lang, target="en").translate(q)
+            print(f"\U0001F30D {lang} → EN: {q!r} → {t!r}")
+            return t or q
+    except Exception as e:
+        print(f"⚠️ Lang detect/translate failed: {e}")
+    return q
+
+# ========= Data-driven tag resolver (no hardcoding) =========
+# Uses your cached list of actual OSM tag values
+try:
+    from rapidfuzz import fuzz
+    def _sim(a, b): return fuzz.token_set_ratio(a, b)  # 0..100
+except Exception:
+    import difflib
+    def _sim(a, b): return int(100 * difflib.SequenceMatcher(None, a, b).ratio())
+
+def _norm(s: str) -> str:
+    s = (s or "").lower()
+    s = re.sub(r"[/_]+", " ", s)
+    s = re.sub(r"[^\w\s]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    # tiny, general singularization (enough for pharmacies→pharmacy, toilets→toilet)
+    if s.endswith("ies"): s = s[:-3] + "y"
+    elif s.endswith("ves"): s = s[:-3] + "f"
+    elif s.endswith("s") and len(s) > 3: s = s[:-1]
+    return s
+
+@lru_cache()
+def _load_values_index(data_path: str = "../osm_tags/tag_values/all_osm_tags.json") -> Dict[str, set]:
+    """
+    Load your combined tag-values JSON produced by your fetcher.
+    Keeps only POI-ish keys to reduce noise.
+    """
+    path = data_path
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing tag-values JSON at {path} — run your fetcher first.")
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    allowed = {"amenity","shop","tourism","leisure","healthcare","craft","office","natural","highway"}
+    return {k: set(vs) for k, vs in data.items() if k in allowed and isinstance(vs, list)}
+
+def resolve_tag_from_values(phrase: str, threshold: int = 60) -> Optional[Tuple[str, str, int]]:
+    """
+    Map a natural phrase to (key, value, score) by fuzzy matching against known OSM values (data-driven).
+    Returns None if nothing crosses threshold.
+    """
+    phrase_n = _norm(phrase)
+    if not phrase_n:
+        return None
+    idx = _load_values_index()
+
+    best = ("", "", -1)
+    for key, values in idx.items():
+        for val in values:
+            score = _sim(phrase_n, _norm(val))
+            if score > best[2]:
+                best = (key, val, score)
+    return best if best[2] >= threshold else None
+
+# ========= Parser helpers =========
+DEFAULT_RADIUS = 1000  # meters
+_COORDS_RE = re.compile(r"\b(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\b")
+
+def _clean_name(n: str) -> str:
+    return (n or "").strip().strip(string.punctuation)
+
+def _candidate_places_from_text(q_en: str) -> list:
+    """
+    Pull a few likely place strings from the text using spaCy (if available) and a simple regex tail.
+    """
+    cands = []
+    nlp = _get_nlp()
+    if nlp:
+        try:
+            doc = nlp(q_en)
+            cands.extend([ent.text for ent in doc.ents if ent.label_ in {"GPE","LOC","FAC","ORG"}])
+        except Exception:
+            pass
+    m = re.search(r"(?:in|near|around|by)\s+(.+)", q_en, re.IGNORECASE)
+    if m:
+        cands.append(m.group(1))
+    # geoparser as an extra (optional)
+    if _GEOPARSER:
+        try:
+            parsed = _GEOPARSER.parse(q_en) or {}
+            for loc in (parsed.get("locations") or []):
+                nm = loc.get("name")
+                if nm: cands.append(nm)
+        except Exception:
+            pass
+    # dedupe keeping order
+    seen = set()
+    out = []
+    for c in cands:
+        cc = _clean_name(c)
+        if cc and cc.lower() not in seen:
+            out.append(cc)
+            seen.add(cc.lower())
+    return out[:3]
+
+# ========= MAIN: parse_question =========
+def parse_question(raw_q: str, lat: float = None, lon: float = None) -> Dict:
+    """
+    Parse a natural-language question into Overpass query params.
+
+    Preference order:
+      1) Explicit CLI coordinates
+      2) Tag detection (data-driven resolver using cached OSM values)
+      3) NER/regex/geoparser for a place center
+      4) Final fallback: Everest center (so we never crash)
+    """
+    t0 = time.time()
+    q_en = detect_and_translate(raw_q or "")
+
+    P = {
+        "tag_key": None,
+        "tag_value": None,
+        "mode": "generic",
+        "center": None,
+        "radius": DEFAULT_RADIUS,
+        "place_name": None,
+        "loc_source": None,
+        # optional filters you might set elsewhere:
+        # "wheelchair_only": False, "pet_friendly": False, "opening_hours_regex": None
+    }
+
+    # (1) CLI lat/lon wins for center
+    if lat is not None and lon is not None:
+        P.update({"center": (float(lat), float(lon)), "loc_source": "cli_coords", "place_name": "user_location"})
+    else:
+        # also allow explicit coords in text
+        m = _COORDS_RE.search(q_en)
+        if m:
+            P.update({"center": (float(m.group(1)), float(m.group(2))), "loc_source": "coords_in_text", "place_name": "user_location"})
+
+    # (2) Tag detection (data-driven): resolve user phrase to an actual (key,value)
+    # Try full question first; if weak, also try simple noun chunks
+    tag_hit = resolve_tag_from_values(q_en)
+    if not tag_hit:
+        # try noun chunks/head nouns for better matching ("hair salon", "public toilet", etc.)
+        nlp = _get_nlp()
+        if nlp:
+            try:
+                doc = nlp(q_en)
+                chunks = sorted({nc.text for nc in doc.noun_chunks}, key=len, reverse=True)
+            except Exception:
+                chunks = []
+        else:
+            chunks = []
+        for ph in chunks[:4]:
+            tag_hit = resolve_tag_from_values(ph)
+            if tag_hit:
+                break
+
+    if tag_hit:
+        k, v, score = tag_hit
+        P["tag_key"], P["tag_value"] = k, v
+        print(f"🏷️ Fallback tag from values: {k}={v} (score={score})")
+
+    # (3) If no center yet, try to geocode named places extracted from text
+    if P.get("center") is None:
+        cands = _candidate_places_from_text(q_en)
+        for c in cands:
+            try:
+                coords = geocode_point_cached(c)
+                P.update({"center": coords, "place_name": c, "loc_source": "NER/regex"})
+                print(f"📍 Geocoded: {c} → {coords}")
+                break
+            except Exception:
+                continue
+
+    # (4) Final fallback center to avoid crashes downstream
+    if P.get("center") is None:
+        P.update({"center": (27.9881, 86.9250), "place_name": "Mount Everest", "loc_source": "fallback"})
+        print("⚠️ No location found, defaulting to Mount Everest")
+
+    print(f"🕒 parse_question took {time.time() - t0:.2f}s")
+    return P
+
+# ========= QUERY BUILDER (with guardrails) =========
+def build_overpass_query(P: Dict) -> str:
+    """
+    Build Overpass QL query from params P with strict guardrails:
+      - If we have a selector (tag filters), use area (if named place) or around(center,radius) with nodes+ways+relations.
+      - If we have NO selector, never query widely: return a tiny nodes-only around() (min(radius, 250m)).
+      - Never emit an unbounded query.
+    """
+    # Collect filter parts
     selector_parts = []
 
-    # primary (key=value)
     if P.get("tag_key") and P.get("tag_value"):
         selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
 
-    # optional modifiers you already support
     if P.get("wheelchair_only"):
         selector_parts.append('"wheelchair"="yes"')
 
@@ -266,22 +280,17 @@ def build_overpass_query(P):
         selector_parts.append('"pets"="yes"')
 
     if P.get("opening_hours_regex"):
-        # escape double quotes if any
         oh = str(P["opening_hours_regex"]).replace('"', r'\"')
         selector_parts.append(f'"opening_hours"~"{oh}"')
-
-    # You can add more optional filters here, e.g.:
-    # if P.get("cuisine"): selector_parts.append(f'"cuisine"="{P["cuisine"]}"')
-    # if P.get("name_regex"): selector_parts.append(f'"name"~"{P["name_regex"]}"')
 
     selector = " and ".join(selector_parts)
     selector_brackets = f"[{selector}]" if selector else ""
 
-    # --- clamp radius for safety ---
-    radius = int(P.get("radius", 1000) or 1000)
-    radius = max(50, min(radius, 5000))  # 50 m .. 5 km
+    # Clamp radius
+    radius = int(P.get("radius", DEFAULT_RADIUS) or DEFAULT_RADIUS)
+    radius = max(50, min(radius, 5000))
 
-    # --- branch 1: area query (only if we actually have a selector) ---
+    # Prefer area query only when we actually have a selector (to avoid pointless area sweeps)
     place_name = P.get("place_name")
     if place_name and place_name != "user_location" and selector:
         try:
@@ -296,21 +305,18 @@ def build_overpass_query(P):
         except Exception as e:
             print(f"⚠️ Failed to get areaId for {place_name}: {e}")
 
-    # --- branch 2: around(center, radius) ---
+    # around(center, radius)
     if P.get("center"):
         lat, lon = P["center"]
-
-        # Guardrail: if we have NO selector, return a tiny nodes-only query
-        # to avoid pulling tens of thousands of elements.
         if not selector:
-            tiny = min(radius, 250)  # keep it small when unfiltered
+            # Guardrail: tagless query → tiny nodes-only to avoid 50k+ elements
+            tiny = min(radius, 250)
             return (
                 f'[out:json][timeout:25];'
                 f'(node(around:{tiny},{lat},{lon}););'
                 f'out body;'
             )
-
-        # Normal filtered query: nodes + ways + relations
+        # Normal filtered query
         return (
             f'[out:json][timeout:25];'
             f'(node(around:{radius},{lat},{lon}){selector_brackets};'
@@ -319,6 +325,5 @@ def build_overpass_query(P):
             f'out body;'
         )
 
-    # --- if we got here, we have neither usable area nor center ---
-    # Don’t generate an unbounded query.
+    # If neither area nor center is usable, refuse to build a query
     raise ValueError("❌ Cannot build query: need a place_name with selector or a center coordinate.")
