@@ -257,6 +257,7 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
         ])
 
     # Parse → (optional) route → Overpass → Summarize → Translate → TTS
+    print("Hi!")
     params = parse_question(question, lat=lat, lon=lon)
 
     # Optional routing summary
