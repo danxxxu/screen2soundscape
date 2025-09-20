@@ -316,6 +316,9 @@ def run_osm(question, language, speaker, speed, output_mode, lat=None, lon=None)
     # Run Overpass safely
     try:
         results = run_overpass_query(overpass_query)
+        elements = results.get("elements", [])
+        lat0, lon0 = params["center"]
+        nearest5 = top_k_nearest(elements, lat0, lon0, k=5)
     except Exception as e:
         msg = f"Sorry, I couldn't run the map search ({e})."
         print(msg)
@@ -717,6 +720,12 @@ if __name__ == "__main__":
     # Optional geohints for OSM / PLACE
     parser.add_argument("--lat", type=float, help="Latitude of the current user location")
     parser.add_argument("--lon", type=float, help="Longitude of the current user location")
+    parser.add_argument("--radius-m", type=int, default=500,
+                    help="Search radius in meters for OSM around() queries")
+    parser.add_argument("--out-limit", type=int, default=100,
+                        help="Max rows to return from Overpass (caps runtime)")
+    parser.add_argument("--k-nearest", type=int, default=5,
+                        help="How many nearest POIs to report")
 
     # Keep the process alive to reuse the loaded model
     parser.add_argument("--loop", action="store_true", help="Keep process alive to reuse loaded models")
