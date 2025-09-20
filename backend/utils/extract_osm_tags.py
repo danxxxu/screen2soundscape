@@ -5,7 +5,7 @@ import os
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 # Directory for per-key cache files
-CACHE_DIR = Path("../osm_tags/tag_values")
+CACHE_DIR = Path("osm_tags/tag_values")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # List of core OSM keys to fetch
