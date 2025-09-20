@@ -11,9 +11,19 @@ var audio_buffer: PackedByteArray
 var is_streaming: bool = false
 var is_connected: bool = false
 var is_audio_ready: bool = false
+var reconnection_attempts: int = 0
+var max_reconnection_attempts: int = 5
+var reconnection_delay: float = 1.0
+
+# Chunk tracking system
+var sent_chunks: Dictionary = {}  # chunk_index -> {data, timestamp, retry_count}
+var acknowledged_chunks: Array = []  # Array of acknowledged chunk indices
+var current_transmission_id: int = 0
+var chunk_timeout: float = 5.0  # seconds to wait before resending
+var max_retries: int = 3
 
 # WebSocket server URL
-# var server_url: String = "ws://localhost:8000/ws/audio/"
+#var server_url: String = "ws://localhost:8000/ws/audio/"
 
 var server_url: String = "ws://142.93.234.209:8000/ws/audio/"
 
@@ -57,6 +67,7 @@ func connect_to_server():
 	
 	print("Connection request sent to WebSocket server")
 
+
 func get_player_coordinates() -> Dictionary:
 	if not player:
 		return {"lat": 0.0, "lon": 0.0}
@@ -86,24 +97,21 @@ func send_command(command_text: String):
 		websocket.send_text(json_string)
 		print("Sent command to WebSocket: ", json_string)
 	else:
-		print("WebSocket not connected, attempting to reconnect...")
-		connect_to_server()
-		
-		await get_tree().create_timer(0.5).timeout
-		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-			var json_string = JSON.stringify(message)
-			websocket.send_text(json_string)
-			print("Sent command to WebSocket after reconnection: ", json_string)
-		else:
-			print("Failed to reconnect, cannot send command: ", command_text)
+		print("WebSocket not connected. Press F5 to manually reconnect.")
+		print("Cannot send command: ", command_text)
 
 func _process(delta):
 	websocket.poll()
+	
+	# Check for missing chunks periodically
+	if sent_chunks.size() > 0:
+		_check_for_missing_chunks()
 	
 	var state = websocket.get_ready_state()
 	if websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
 		if not is_connected:
 			is_connected = true
+			reconnection_attempts = 0  # Reset reconnection attempts on successful connection
 			print("WebSocket connection established")
 			connection_established.emit()
 			
@@ -125,12 +133,15 @@ func _process(delta):
 					
 					if parse_result == OK:
 						var data = json.data
-						if data.has("type") and data["type"] == "audio_end":
-							print("Audio stream completed: ", data["message"])
-							is_streaming = false
-							is_audio_ready = true
-							audio_stream_completed.emit()
-							_play_audio_buffer()  # Play the complete audio
+						if data.has("type"):
+							if data["type"] == "audio_end":
+								print("Audio stream completed: ", data["message"])
+								is_streaming = false
+								is_audio_ready = true
+								audio_stream_completed.emit()
+								_play_audio_buffer()  # Play the complete audio
+							elif data["type"] == "ack":
+								_handle_acknowledgment(data)
 				
 				# Check if it's binary data (MP3 chunks)
 				else:
@@ -148,6 +159,8 @@ func _process(delta):
 			print("WebSocket connection closed")
 			is_connected = false
 			is_streaming = false
+			print("Press F5 to manually reconnect to WebSocket server")
+				
 		elif code == WebSocketPeer.STATE_CLOSING:
 			print("WebSocket connection closing...")
 		elif code == WebSocketPeer.STATE_CONNECTING:
@@ -176,6 +189,22 @@ func _on_audio_finished():
 
 func _on_connection_established():
 	print("WebSocket connection established")
+	reconnection_attempts = 0  # Reset reconnection attempts on successful connection
+
+func reset_reconnection_attempts():
+	reconnection_attempts = 0
+	print("Reconnection attempts reset")
+
+func manual_reconnect():
+	print("Manual reconnection requested")
+	reconnection_attempts = 0  # Reset attempts for manual reconnection
+	connect_to_server()
+
+func _input(event):
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_F5:
+			print("F5 pressed - attempting to reconnect to WebSocket server")
+			manual_reconnect()
 
 func _on_connection_failed():
 	print("WebSocket connection failed")
@@ -210,16 +239,8 @@ func send_audio_data(audio_data: String):
 		websocket.send_text(json_string)
 		print("Sent complete audio file to WebSocket")
 	else:
-		print("WebSocket not connected, attempting to reconnect...")
-		connect_to_server()
-		
-		await get_tree().create_timer(0.5).timeout
-		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-			var json_string = JSON.stringify(message)
-			websocket.send_text(json_string)
-			print("Sent complete audio file to WebSocket after reconnection")
-		else:
-			print("Failed to reconnect, cannot send audio file")
+		print("WebSocket not connected. Press F5 to manually reconnect.")
+		print("Cannot send audio file")
 
 func send_audio_chunk(audio_chunk: String, chunk_index: int, total_chunks: int):
 	# Get player coordinates
@@ -231,8 +252,18 @@ func send_audio_chunk(audio_chunk: String, chunk_index: int, total_chunks: int):
 		"data": audio_chunk,
 		"chunk_index": chunk_index,
 		"total_chunks": total_chunks,
+		"transmission_id": current_transmission_id,
 		"lat": coords.lat,
 		"lon": coords.lon
+	}
+	
+	# Track the chunk for potential resending
+	sent_chunks[chunk_index] = {
+		"data": audio_chunk,
+		"timestamp": Time.get_unix_time_from_system(),
+		"retry_count": 0,
+		"total_chunks": total_chunks,
+		"message": message
 	}
 	
 	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
@@ -240,16 +271,75 @@ func send_audio_chunk(audio_chunk: String, chunk_index: int, total_chunks: int):
 		websocket.send_text(json_string)
 		print("Sent audio chunk ", chunk_index + 1, "/", total_chunks, " to WebSocket")
 	else:
-		print("WebSocket not connected, attempting to reconnect...")
-		connect_to_server()
+		print("WebSocket not connected. Press F5 to manually reconnect.")
+		print("Cannot send audio chunk: ", chunk_index)
+
+func _handle_acknowledgment(data: Dictionary):
+	# Extract chunk number from acknowledgment message
+	var message = data.get("message", "")
+	var regex = RegEx.new()
+	regex.compile("Received chunk (\\d+)/(\\d+)")
+
+	var chunk_match = regex.search(message)
+	
+	if chunk_match:
+		var chunk_num = int(chunk_match.get_string(1)) - 1  # Convert to 0-based index
+		var total_chunks = int(chunk_match.get_string(2))
 		
-		await get_tree().create_timer(0.5).timeout
-		if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-			var json_string = JSON.stringify(message)
-			websocket.send_text(json_string)
-			print("Sent audio chunk ", chunk_index + 1, "/", total_chunks, " to WebSocket after reconnection")
-		else:
-			print("Failed to reconnect, cannot send audio chunk: ", chunk_index)
+		print("Received acknowledgment for chunk ", chunk_num + 1, "/", total_chunks)
+		
+		# Mark chunk as acknowledged
+		if chunk_num not in acknowledged_chunks:
+			acknowledged_chunks.append(chunk_num)
+		
+		# Remove from sent_chunks tracking
+		if chunk_num in sent_chunks:
+			sent_chunks.erase(chunk_num)
+		
+		# Check if all chunks are acknowledged
+		if acknowledged_chunks.size() == total_chunks:
+			print("All chunks acknowledged successfully!")
+			_clear_transmission_data()
+
+func _check_for_missing_chunks():
+	var current_time = Time.get_unix_time_from_system()
+	var chunks_to_resend = []
+	
+	for chunk_index in sent_chunks.keys():
+		var chunk_data = sent_chunks[chunk_index]
+		var time_since_sent = current_time - chunk_data.timestamp
+		
+		if time_since_sent > chunk_timeout and chunk_data.retry_count < max_retries:
+			chunks_to_resend.append(chunk_index)
+	
+	# Resend missing chunks
+	for chunk_index in chunks_to_resend:
+		_resend_chunk(chunk_index)
+
+func _resend_chunk(chunk_index: int):
+	if chunk_index not in sent_chunks:
+		return
+	
+	var chunk_data = sent_chunks[chunk_index]
+	chunk_data.retry_count += 1
+	chunk_data.timestamp = Time.get_unix_time_from_system()
+	
+	print("Resending chunk ", chunk_index + 1, "/", chunk_data.total_chunks, " (attempt ", chunk_data.retry_count, ")")
+	
+	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		var json_string = JSON.stringify(chunk_data.message)
+		websocket.send_text(json_string)
+	else:
+		print("WebSocket not connected, cannot resend chunk: ", chunk_index)
+
+func _clear_transmission_data():
+	sent_chunks.clear()
+	acknowledged_chunks.clear()
+	current_transmission_id += 1
+
+func start_new_transmission():
+	_clear_transmission_data()
+	print("Started new transmission with ID: ", current_transmission_id)
 
 func _exit_tree():
 	disconnect_from_server() 

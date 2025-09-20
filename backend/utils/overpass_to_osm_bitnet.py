@@ -20,7 +20,7 @@ import json
 import re
 from pathlib import Path
 from typing import List, Optional
-
+from math import hypot
 import requests
 from requests.exceptions import HTTPError
 
@@ -28,8 +28,8 @@ from utils.osm_tags import TAG_MAP, find_osm_tags
 from utils.bitnet_singleton import chat as bitnet_chat
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-
-# Optional warm flag to avoid cold-start hiccup on first call
+OVERPASS_RESULT_LIMIT = 5
+MAX_ELEMENTS_TO_SCAN = 50
 _BITNET_WARMED = False
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -56,15 +56,24 @@ def _place_phrase(name: Optional[str], street: Optional[str]) -> Optional[str]:
 
 
 def _baseline_sentence(items: List[str], total: int) -> str:
-    """Deterministic, already-fluent fallback sentence."""
+    """
+    Deterministic, already-fluent fallback sentence (never crashes).
+    items: up to 3 short phrases like "Public Toilet on Kerkstraat"
+    total: total count returned by Overpass (may exceed items length)
+    """
     if total == 0:
         return "I couldn't find any matching places nearby."
-    if total == 1:
+    n = len(items)
+    if n == 0:
+        # We found places but none had a decent name/street combo.
+        return f"I found {total} places nearby."
+    if n == 1:
         return f"I found one place nearby: {items[0]}."
-    if total == 2:
+    if n == 2:
         return f"I found two places: {items[0]} and {items[1]}."
     examples = ", ".join(items[:-1]) + f", and {items[-1]}"
     return f"I found {total} places nearby; for example {examples}."
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -175,32 +184,20 @@ def _bitnet_generate_overpass(question: str, lat: Optional[float], lon: Optional
     return q
 
 
-def _strip_code_fences(text: str) -> str:
-    # Prefer fenced block content if present
-    m = re.search(r"```(?:[a-zA-Z0-9_+-]*)\s*(.*?)```", text, flags=re.DOTALL)
-    if m:
-        return m.group(1)
-    # Otherwise remove single backticks and common prefixes like "A:" or "Answer:"
-    text = re.sub(r"^(\s*(A:|Answer:))", "", text.strip(), flags=re.IGNORECASE)
-    text = text.replace("```", "").strip("`").strip()
-    return text.strip()
-
-
-def _ensure_header(q: str) -> str:
-    if not q.lstrip().startswith("[out:json]"):
-        q = "[out:json][timeout:25];\n" + q.lstrip()
-    return q
-
-
 def _ensure_out_center(q: str) -> str:
-    # If 'out center;' not present, add it at end.
-    if "out center;" not in q:
-        if "out" in q:
-            # Replace bare 'out;' with 'out center;'
-            q = re.sub(r"\bout\s*;\s*$", "out center;", q.strip(), flags=re.IGNORECASE)
-        else:
-            q = q.rstrip() + "\nout center;"
+    """
+    Make sure the query ends with an 'out center ...;' clause.
+    We do NOT add a limit here; that is enforced by _sanitize_overpass_output.
+    """
+    q = q.strip()
+    if "out center" in q.lower():
+        return q if q.endswith(";") else (q + ";")
+    # Replace bare 'out;' with 'out center;'
+    q = re.sub(r"\bout\s*;\s*$", "out center;", q, flags=re.IGNORECASE)
+    if "out center" not in q.lower():
+        q = q.rstrip() + "\nout center;"
     return q
+
 
 
 def _ensure_final_semicolon(q: str) -> str:
@@ -236,19 +233,56 @@ def _maybe_inject_around_clause(q: str, lat: Optional[float], lon: Optional[floa
     return q2
 
 def _sanitize_overpass_output(text: str, lat: Optional[float], lon: Optional[float], radius: int) -> str:
+    """
+    Take raw model text and force it into a valid, minimal Overpass QL with:
+      - header
+      - around clause if coords provided but missing
+      - 'out center <LIMIT>;' tail
+      - final semicolon
+    """
+    def _strip_code_fences(src: str) -> str:
+        m = re.search(r"```(?:[a-zA-Z0-9_+-]*)\s*(.*?)```", src, flags=re.DOTALL)
+        if m:
+            return m.group(1).strip()
+        src = src.replace("```", "").strip("`").strip()
+        return src
+
+    def _ensure_header(q: str) -> str:
+        return q if q.lstrip().startswith("[out:json]") else "[out:json][timeout:25];\n" + q.lstrip()
+
+    def _ensure_final_semicolon(q: str) -> str:
+        return q if q.rstrip().endswith(";") else (q.rstrip() + ";")
+
+    def _maybe_inject_around_clause(q: str, lat_: Optional[float], lon_: Optional[float], r_: int) -> str:
+        if lat_ is None or lon_ is None:
+            return q
+        if f"(around:{r_},{lat_},{lon_})" in q:
+            return q
+        # Inject a single around clause after the first node/way/relation selector without an explicit area/around
+        def inject(selector: str, text: str) -> str:
+            pattern = rf"({selector}\s*(?:\[[^\]]+\]\s*)*)(\([^)]*\))?"
+            def repl(m):
+                head, paren = m.group(1), (m.group(2) or "")
+                if "around:" in paren or "area:" in paren or "," in paren:
+                    return m.group(0)
+                return f"{head}(around:{r_},{lat_},{lon_})"
+            return re.sub(pattern, repl, text, count=1, flags=re.IGNORECASE)
+
+        for sel in ("node", "way", "relation"):
+            q = inject(sel, q)
+        return q
+
     q = _strip_code_fences(text)
-    # Strip inline comments or markdown-ish cruft
-    lines = []
-    for line in q.splitlines():
-        # Remove obvious comments (//, #) but keep Overpass comments /* ... */ out of scope
-        if re.match(r"\s*(//|#)", line):
-            continue
-        lines.append(line)
-    q = "\n".join(lines).strip()
+    # Drop obvious line comments
+    q = "\n".join([ln for ln in q.splitlines() if not re.match(r"\s*(//|#)", ln)]).strip()
 
     q = _ensure_header(q)
     q = _maybe_inject_around_clause(q, lat, lon, radius)
     q = _ensure_out_center(q)
+
+    # Enforce the hard top-3 limit on the out clause
+    q = re.sub(r"\bout\s+center\b[^;]*;", f"out center {OVERPASS_RESULT_LIMIT};", q, flags=re.IGNORECASE)
+
     q = _ensure_final_semicolon(q)
     return q
 
@@ -256,41 +290,42 @@ def _sanitize_overpass_output(text: str, lat: Optional[float], lon: Optional[flo
 # ──────────────────────────────────────────────────────────────────────────────
 # Public functions
 # ──────────────────────────────────────────────────────────────────────────────
-def generate_overpass_query(question: str, lat: float = None, lon: float = None, radius: int = 2000) -> str:
+def generate_overpass_query(question: str, lat: float = None, lon: float = None, radius: int = 1000) -> str:
     """
-    Generate an Overpass QL query.
-    1) Try deterministic TAG_MAP generation.
-    2) Fall back to BitNet-generated Overpass QL (sanitized).
+    Generate an Overpass QL query:
+      1) Deterministic TAG_MAP generation (preferred).
+      2) Fall back to BitNet-generated QL (then sanitized).
+    Always capped to top 3 via the sanitizer.
     """
+    from utils.osm_tags import find_osm_tags  # keep the existing import style
+
     tags = find_osm_tags(question)
 
     if tags:
-        # ✅ Deterministic query
         conditions = "".join([f'["{k}"="{v}"]' for k, v in tags.items()])
         if lat is not None and lon is not None:
-            query = f"""
+            q = f"""
 [out:json][timeout:25];
 (
   node{conditions}(around:{radius},{lat},{lon});
   way{conditions}(around:{radius},{lat},{lon});
   relation{conditions}(around:{radius},{lat},{lon});
 );
-out center;
+out center {OVERPASS_RESULT_LIMIT};
 """
         else:
-            # No coordinates, fallback to global search
-            query = f"""
+            q = f"""
 [out:json][timeout:25];
 (
   node{conditions};
   way{conditions};
   relation{conditions};
 );
-out center;
+out center {OVERPASS_RESULT_LIMIT};
 """
-        return query.strip()
+        return q.strip()
 
-    # ❌ No TAG_MAP match → use BitNet to synthesize Overpass QL
+    # No deterministic tags → synthesize and sanitize
     return _bitnet_generate_overpass(question, lat, lon, radius)
 
 
@@ -303,19 +338,48 @@ def run_overpass_query(query: str) -> dict:
         raise RuntimeError(f"Overpass API error: {e}") from e
 
 
-def summarize_results(question: str, data: dict) -> str:
+def summarize_results(question: str, data: dict, center: Optional[tuple] = None) -> str:
     """
-    Build a clear baseline sentence from OSM tags, then let BitNet
-    polish it. Falls back to the baseline if the model output is malformed.
+    Build a clear baseline sentence from OSM tags, then let BitNet polish it.
+    We optionally sort by distance to 'center' when provided.
+    Always uses at most the top-3 examples for speech.
     """
+    def _place_phrase(name: Optional[str], street: Optional[str]) -> Optional[str]:
+        if not name and not street:
+            return None
+        street_tokens = (
+            "straat lane laan road rd street st avenue ave boul boulevard blvd place plein square "
+            "market markt drive dr weg quai kade dijk gracht"
+        ).split()
+        def _prep(s: str) -> str:
+            s = (s or "").lower()
+            return "on" if any(tok in s for tok in street_tokens) else "at"
+        if name and street:
+            return f"{name} {_prep(street)} {street}"
+        return name or street
+
     elements = data.get("elements", [])
     total = len(elements)
     if total == 0:
         return "Sorry, I couldn't find any relevant places for your query."
 
-    # — Collect up to three formatted item phrases ———————————————
+    # Optional: sort by distance to search center so examples are truly “closest”
+    if center is not None and isinstance(center, tuple) and len(center) == 2:
+        clat, clon = center
+        def el_coord(el):
+            if "center" in el:
+                return el["center"].get("lat"), el["center"].get("lon")
+            if "lat" in el and "lon" in el:
+                return el.get("lat"), el.get("lon")
+            return None, None
+        def dist(el):
+            lat, lon = el_coord(el)
+            return 9e9 if lat is None or lon is None else hypot(lat - clat, lon - clon)
+        elements = sorted(elements, key=dist)
+
+    # Collect up to 3 decent phrases, scanning only a small subset
     phrases: List[str] = []
-    for el in elements[:3]:
+    for el in elements[:MAX_ELEMENTS_TO_SCAN]:
         tags = el.get("tags", {}) or {}
         name = tags.get("name")
         street = tags.get("addr:street") or tags.get("addr:full")
@@ -323,6 +387,8 @@ def summarize_results(question: str, data: dict) -> str:
         phrase = _place_phrase(name or (f"a {t}" if t else None), street)
         if phrase:
             phrases.append(phrase)
+        if len(phrases) == 3:
+            break
 
     baseline = _baseline_sentence(phrases, total)
     return _bitnet_rewrite(baseline)

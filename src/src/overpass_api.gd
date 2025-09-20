@@ -2,6 +2,93 @@
 extends Node
 class_name OverpassAPI
 
+const TAGS = [
+	['access', 'university'],
+	['aeroway', 'helipad'],
+	['amenity', 'atm'],
+	['amenity', 'atm', 'symbol'],
+	['amenity', 'bank'],
+	['amenity', 'bank', 'symbol'],
+	['amenity', 'bar'],
+	['amenity', 'bicycle', 'parking'],
+	['amenity', 'bicycle', 'rental'],
+	['amenity', 'bus', 'station'],
+	['amenity', 'cafe'],
+	['amenity', 'clinic'],
+	['amenity', 'dentist'],
+	['amenity', 'fastfood'],
+	['amenity', 'fire', 'station'],
+	['amenity', 'fountain'],
+	['amenity', 'fuel'],
+	['amenity', 'hospital'],
+	['amenity', 'parking', 'entrance'],
+	['amenity', 'parking', 'space'],
+	['amenity', 'parking', 'symbol'],
+	['amenity', 'pharmacy'],
+	['amenity', 'police'],
+	['amenity', 'post', 'office'],
+	['amenity', 'pub'],
+	['amenity', 'pub', 'symbol'],
+	['amenity', 'restaurant'],
+	['amenity', 'school'],
+	['amenity', 'school', 'symbol'],
+	['amenity', 'toilets'],
+	['amenity', 'university'],
+	['barrier', 'gate', 'symbol'],
+	['barrier', 'hedge'],
+	['barrier', 'wall'],
+	['building', 'garage', 'symbol'],
+	['bus', 'stop'],
+	['charging', 'station'],
+	['events', 'venue'],
+	['hairdresser', 'symbol'],
+	['highway', 'bus', 'stop'],
+	['highway', 'crossing'],
+	['highway', 'footway'],
+	['highway', 'primary'],
+	['highway', 'residential'],
+	['highway', 'service'],
+	['highway', 'tertiary'],
+	['highway', 'track'],
+	['highway', 'unclassified'],
+	['ice', 'cream'],
+	['landuse', 'farmland'],
+	['landuse', 'farmland', 'symbol'],
+	['landuse', 'forest'],
+	['landuse', 'grass'],
+	['landuse', 'meadow'],
+	['landuse', 'railway'],
+	['language', 'school'],
+	['leisure', 'park'],
+	['loading', 'dock'],
+	['location', 'forestpark'],
+	['location', 'park2'],
+	['location', 'store door'],
+	['natural', 'tree'],
+	['natural', 'water'],
+	['natural', 'wetland'],
+	['natural', 'wood'],
+	['navigation', 'footsteps', 'wet1'],
+	['post', 'office'],
+	['power', 'generator'],
+	['power', 'pole'],
+	['power', 'tower'],
+	['railway', 'station'],
+	['shop', 'bakery'],
+	['shop', 'clothes'],
+	['shop', 'convenience'],
+	['shop', 'supermarket'],
+	['social', 'centre'],
+	['social', 'facility'],
+	['surface', 'asphalt'],
+	['surface', 'paved'],
+	['surface', 'unpaved'],
+	['tourism', 'attraction'],
+	['tourism', 'hotel'],
+	['type', 'street'],
+	['waterway', 'stream']
+]
+
 func query_buildings(lat1: float, lon1: float, lat2: float, lon2: float) -> Dictionary:
 	"""
 	Query buildings from Overpass API using real world coordinates
@@ -97,43 +184,18 @@ func query_places(lat1: float, lon1: float, lat2: float, lon2: float) -> Diction
 	
 	print("🏪 Querying Overpass API for places...")
 	print("📍 Bounding box: ", min_lat, ",", min_lon, " to ", max_lat, ",", max_lon)
-	
-	# Construct complex Overpass API query for places
 	var bbox = "(%f,%f,%f,%f)" % [min_lat, min_lon, max_lat, max_lon]
+
+	# Build the query body dynamically
+	var bodytext = ""
+	for tag in TAGS:
+		bodytext += '  node["%s"="%s"]%s;\n' % [tag[0], tag[1], bbox]
+
+	# Final Overpass query
 	var query = """[out:json][timeout:1800];
+	(%s);
+	out center 10000;""" % bodytext
 
-(
-  node["amenity"="place_of_worship"]%s;
-  node["amenity"="restaurant"]%s;
-  node["amenity"="cafe"]%s;
-  node["amenity"="bar"]%s;
-  node["amenity"="fast_food"]%s;
-  node["amenity"="pub"]%s;
-  node["amenity"="ice_cream"]%s;
-  node["amenity"="pharmacy"]%s;
-  node["amenity"="bank"]%s;
-  node["amenity"="atm"]%s;
-  node["amenity"="school"]%s;
-  node["amenity"="university"]%s;
-  node["amenity"="toilets"]%s;
-  node["amenity"="police"]%s;
-  node["amenity"="fire_station"]%s;
-  node["shop"]%s;
-  node["tourism"="hotel"]%s;
-  node["tourism"="attraction"]%s;
-  node["leisure"="park"]%s;
-  node["amenity"="post_office"]%s;
-  node["amenity"="fuel"]%s;
-  node["amenity"="bus_station"]%s;
-  node["railway"="station"]%s;
-);
-
-out center 10000;""" % [
-		bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox,
-		bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox, bbox,
-		bbox, bbox, bbox
-	]
-	
 	# Create HTTP request
 	var http_request = HTTPRequest.new()
 	add_child(http_request)

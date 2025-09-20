@@ -2,6 +2,7 @@
 extends Node3D
 
 const PlaceData = preload("res://src/models/Place.gd")
+const MapUtils = preload("res://src/map_utils.gd")
 
 var place_data_models: Array[PlaceData] = []
 
@@ -25,19 +26,6 @@ func _ready():
 			wait_count += 1
 		print("🏗️ Buildings loaded, now loading places...")
 	
-	# Use the same coordinates as buildings
-	# belgium
-	const location = [51.58853722988234, 4.779177373402243, 51.59037977578852, 4.78199061828104]
-	# nl
-	#const location = [51.586457, 4.772471,51.59010181869865, 4.779824262314036]
-	
-	var lat1 = location[0]
-	var lon1 = location[1]
-	var lat2 = location[2]
-	var lon2 = location[3]
-	
-	await load_places_from_overpass(lat1, lon1, lat2, lon2)
-	create_place_instances()
 
 func _process(_delta):
 	if Engine.is_editor_hint():
@@ -52,13 +40,6 @@ func query_places_with_bounds(lat1: float, lon1: float, lat2: float, lon2: float
 	lat1, lon1: First corner of bounding box
 	lat2, lon2: Second corner of bounding box
 	"""
-	# Clear existing places (disconnect signals automatically when freed)
-	for child in get_children():
-		if child is Place:
-			child.queue_free()
-	
-	# Clear existing data
-	place_data_models.clear()
 	
 	await load_places_from_overpass(lat1, lon1, lat2, lon2)
 	create_place_instances()  # This will reconnect all signals properly
@@ -82,25 +63,17 @@ func load_places_from_overpass(lat1: float, lon1: float, lat2: float, lon2: floa
 
 				# Get name and type
 				place.name = element["tags"].get("name", "Unnamed Place")
-
-				# Determine type from tags
 				var type = "unknown"
 				var category = "unknown"
-				if element["tags"].has("amenity"):
-					type = element["tags"]["amenity"]
-					category = "amenity"
-				elif element["tags"].has("shop"):
-					type = element["tags"]["shop"]
-					category = "shop"
-				elif element["tags"].has("tourism"):
-					type = element["tags"]["tourism"]
-					category = "tourism"
-				elif element["tags"].has("leisure"):
-					type = element["tags"]["leisure"]
-					category = "leisure"
-				elif element["tags"].has("railway"):
-					type = element["tags"]["railway"]
-					category = "railway"
+				
+				for tag in OverpassAPI.TAGS:
+					var key = tag[0]
+					# Check if this element has the tag key
+					if element["tags"].has(key):
+						type = element["tags"][key]
+						category = key
+						break  # stop at the first match (like elif chain)
+
 				place.type = type
 				place.category = category
 
