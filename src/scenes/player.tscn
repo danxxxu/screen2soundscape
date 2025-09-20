@@ -1,9 +1,9 @@
 [gd_scene load_steps=7 format=3 uid="uid://banloe8guvh8w"]
 
-[ext_resource type="Script" uid="uid://c1imbpnx66fln" path="res://src/player.gd" id="1_q2squ"]
-[ext_resource type="AudioStream" uid="uid://dxjh0kiolcl0b" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
-[ext_resource type="AudioStream" uid="uid://dd5ens6ty251a" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
-[ext_resource type="AudioStream" uid="uid://yssxaslcwm1v" path="res://assets/audio/sliding.mp3" id="5_wall"]
+[ext_resource type="Script" uid="uid://c0uxdm8rq568n" path="res://src/player.gd" id="1_q2squ"]
+[ext_resource type="AudioStream" uid="uid://d0udllpvfkq8" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
+[ext_resource type="AudioStream" uid="uid://d0rjlac6ec7jp" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
+[ext_resource type="AudioStream" uid="uid://byk1cci02j6ir" path="res://assets/audio/sliding.mp3" id="5_wall"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 
@@ -30,10 +30,12 @@ transform = Transform3D(0.999724, -0.00737766, 0.0223197, 0.004346, 0.991114, 0.
 
 [node name="distance_stream" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("2_vqdj0")
+bus = &"STS"
 
 [node name="footstep" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("3_thov6")
 volume_db = -18.024
+bus = &"STS"
 
 [node name="Timer" type="Timer" parent="."]
 one_shot = true
@@ -43,13 +45,18 @@ one_shot = true
 
 [node name="sliding_audio" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("5_wall")
+bus = &"STS"
+area_mask = 2049
 
 [node name="wall_audio" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("5_wall")
 volume_db = -10.0
+bus = &"STS"
 
 [node name="rotate_audio" type="AudioStreamPlayer3D" parent="."]
 volume_db = -10.0
+bus = &"STS"
 
 [node name="houses_audio" type="AudioStreamPlayer3D" parent="."]
 volume_db = -10.0
+bus = &"STS"

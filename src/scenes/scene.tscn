@@ -10,6 +10,7 @@
 [ext_resource type="AudioStream" uid="uid://bm77jweqfq3jn" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
 [ext_resource type="Script" uid="uid://brwups7vr8tqw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
 [ext_resource type="Script" uid="uid://cvlxkdiv3tgyr" path="res://src/polygons.gd" id="10_7ftgl"]
+[ext_resource type="PackedScene" uid="uid://dgxr5bab28udq" path="res://scenes/tutorial.tscn" id="10_7ftgl"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -24,6 +25,13 @@ sky = SubResource("Sky_6xlsm")
 tonemap_mode = 2
 
 [sub_resource type="BoxMesh" id="BoxMesh_u8caj"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_7ftgl"]
+font_size = 36
+outline_size = 4
+outline_color = Color(0, 0, 0, 1)
+shadow_size = 5
+shadow_offset = Vector2(3, 3)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_xluca"]
 size = Vector2(1000, 1000)
@@ -62,24 +70,23 @@ mesh = SubResource("BoxMesh_u8caj")
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Label" type="Label" parent="HUD"]
-offset_left = 15.0
-offset_top = 15.0
-offset_right = 481.0
-offset_bottom = 246.0
-text = "Screen to Soundscape DEMO
-Keyboard Arrows to move
-Approach the boxes
-Shift to play distance
-WASD to move 
-<- and -> arrows to rotate
-Q to hear whats on the left (TEST version)
-E to hear whats on the right (TEST version)
-Tab to switch target (distance sensor will switch accordingly)"
+offset_left = 95.0
+offset_top = 78.0
+offset_right = 1050.0
+offset_bottom = 375.0
+text = "Screen to Soundscape Instructions: 
+Switch tutorial on/off - Press \"T\" 
+Skip a tutorial step - Press \"Tab\"
+Move forward/backward - \"Up/down\" arrow keys
+Turn left/right - \"Left/right\" arrow keys
+AI assistant - Press \"Enter\" and type in or record questions"
+label_settings = SubResource("LabelSettings_7ftgl")
 
 [node name="Background Sound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("1_cy7eh")
 volume_db = -14.61
 autoplay = true
+bus = &"STS"
 
 [node name="Floor" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.268, -0.038, 0.118)
@@ -114,6 +121,7 @@ skeleton = NodePath("AudioStreamPlayer3D")
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("3_yxa1m")
 volume_db = -15.89
+bus = &"STS"
 
 [node name="RainTarget" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0213, 1.49, 8.5704)
@@ -125,6 +133,7 @@ skeleton = NodePath("AudioStreamPlayer3D2")
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("4_u6vwu")
 volume_db = -15.89
+bus = &"STS"
 
 [node name="Buildings" type="Node3D" parent="." groups=["buildings"]]
 script = ExtResource("1_buildings")
