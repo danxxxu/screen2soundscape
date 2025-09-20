@@ -11,8 +11,9 @@ from typing import Dict, Optional, Tuple
 from geopy.geocoders import Nominatim as GeopyNominatim
 from langdetect import detect
 from deep_translator import GoogleTranslator
+from pathlib import Path
+OSM_TAG_VALUES_ENV = os.environ.get("OSM_TAG_VALUES_PATH", "").strip()
 
-# Optional, used only for (rare) landmark extraction
 try:
     from geoparser import Geoparser
     _GEOPARSER = Geoparser()
