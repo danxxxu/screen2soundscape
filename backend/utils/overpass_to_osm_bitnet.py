@@ -292,41 +292,40 @@ def _sanitize_overpass_output(text: str, lat: Optional[float], lon: Optional[flo
 # ──────────────────────────────────────────────────────────────────────────────
 def generate_overpass_query(question: str, lat: float = None, lon: float = None, radius: int = 1000) -> str:
     """
-    Generate an Overpass QL query:
-      1) Deterministic TAG_MAP generation (preferred).
-      2) Fall back to BitNet-generated QL (then sanitized).
-    Always capped to top 3 via the sanitizer.
+    Generate an Overpass QL query.
+    1) Try deterministic TAG_MAP generation.
+    2) Fall back to BitNet-generated Overpass QL (sanitized).
     """
-    from utils.osm_tags import find_osm_tags  # keep the existing import style
-
     tags = find_osm_tags(question)
 
     if tags:
+        # ✅ Deterministic query with tag filters
         conditions = "".join([f'["{k}"="{v}"]' for k, v in tags.items()])
         if lat is not None and lon is not None:
-            q = f"""
+            query = f"""
 [out:json][timeout:25];
 (
   node{conditions}(around:{radius},{lat},{lon});
   way{conditions}(around:{radius},{lat},{lon});
   relation{conditions}(around:{radius},{lat},{lon});
 );
-out center {OVERPASS_RESULT_LIMIT};
+out center;
 """
         else:
-            q = f"""
+            query = f"""
 [out:json][timeout:25];
 (
   node{conditions};
   way{conditions};
   relation{conditions};
 );
-out center {OVERPASS_RESULT_LIMIT};
+out center;
 """
-        return q.strip()
+        return query.strip()
 
-    # No deterministic tags → synthesize and sanitize
+    # ❌ No TAG_MAP match → use BitNet to synthesize Overpass QL
     return _bitnet_generate_overpass(question, lat, lon, radius)
+
 
 
 def run_overpass_query(query: str) -> dict:
@@ -338,48 +337,29 @@ def run_overpass_query(query: str) -> dict:
         raise RuntimeError(f"Overpass API error: {e}") from e
 
 
-def summarize_results(question: str, data: dict, center: Optional[tuple] = None) -> str:
+def summarize_results(question: str, data: dict, lat: float = None, lon: float = None) -> str:
     """
-    Build a clear baseline sentence from OSM tags, then let BitNet polish it.
-    We optionally sort by distance to 'center' when provided.
-    Always uses at most the top-3 examples for speech.
+    Build a clear baseline sentence from OSM tags, then let BitNet
+    polish it. Falls back to the baseline if the model output is malformed.
     """
-    def _place_phrase(name: Optional[str], street: Optional[str]) -> Optional[str]:
-        if not name and not street:
-            return None
-        street_tokens = (
-            "straat lane laan road rd street st avenue ave boul boulevard blvd place plein square "
-            "market markt drive dr weg quai kade dijk gracht"
-        ).split()
-        def _prep(s: str) -> str:
-            s = (s or "").lower()
-            return "on" if any(tok in s for tok in street_tokens) else "at"
-        if name and street:
-            return f"{name} {_prep(street)} {street}"
-        return name or street
-
     elements = data.get("elements", [])
     total = len(elements)
     if total == 0:
         return "Sorry, I couldn't find any relevant places for your query."
 
-    # Optional: sort by distance to search center so examples are truly “closest”
-    if center is not None and isinstance(center, tuple) and len(center) == 2:
-        clat, clon = center
-        def el_coord(el):
-            if "center" in el:
-                return el["center"].get("lat"), el["center"].get("lon")
-            if "lat" in el and "lon" in el:
-                return el.get("lat"), el.get("lon")
-            return None, None
-        def dist(el):
-            lat, lon = el_coord(el)
-            return 9e9 if lat is None or lon is None else hypot(lat - clat, lon - clon)
-        elements = sorted(elements, key=dist)
+    # ✅ Sort by distance if user location provided
+    if lat is not None and lon is not None:
+        def dist2(el):
+            c = el.get("center") or el
+            return (c.get("lat", 0) - lat) ** 2 + (c.get("lon", 0) - lon) ** 2
+        elements = sorted(elements, key=dist2)
 
-    # Collect up to 3 decent phrases, scanning only a small subset
+    # ✅ Keep only first 3
+    elements = elements[:3]
+
+    # — Collect formatted item phrases ———————————————
     phrases: List[str] = []
-    for el in elements[:MAX_ELEMENTS_TO_SCAN]:
+    for el in elements:
         tags = el.get("tags", {}) or {}
         name = tags.get("name")
         street = tags.get("addr:street") or tags.get("addr:full")
@@ -387,11 +367,10 @@ def summarize_results(question: str, data: dict, center: Optional[tuple] = None)
         phrase = _place_phrase(name or (f"a {t}" if t else None), street)
         if phrase:
             phrases.append(phrase)
-        if len(phrases) == 3:
-            break
 
     baseline = _baseline_sentence(phrases, total)
     return _bitnet_rewrite(baseline)
+
 
 
 def summarize_route(directions_json: dict) -> str:
