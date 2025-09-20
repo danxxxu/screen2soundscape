@@ -317,7 +317,6 @@ def run_osm(
             tags = item.get("tags", {}) or {}
             name = tags.get("name") or "Unnamed"
             dist = int(round(item.get("distance_m", 0)))
-            # add a tiny hint for the POI type if known
             kind = None
             if "amenity" in tags:
                 kind = tags["amenity"]
@@ -326,7 +325,9 @@ def run_osm(
             kind_str = f" ({kind})" if kind else ""
             lines.append(f"{i}. {name}{kind_str} — {dist} meters away.")
         spoken_text = "Here are the closest places: " + " ".join(lines)
-        # print(spoken_text, flush=True)
+
+    print(spoken_text, flush=True)
+
 
     # ---- TTS ----
     model_path = find_best_piper_model(MODEL_DIR, language, speaker)
