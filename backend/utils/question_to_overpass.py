@@ -239,41 +239,86 @@ _osm_overpass = Overpass()
 _osm_nominatim = OSMToolsNominatim()
 
 def build_overpass_query(P):
+    """
+    Build an Overpass QL query from parsed params P.
+
+    Expected P keys:
+      - tag_key, tag_value            -> primary (key,value) selector
+      - wheelchair_only (bool)        -> adds wheelchair=yes
+      - pet_friendly (bool)           -> adds pets=yes
+      - opening_hours_regex (str)     -> adds opening_hours~"..."
+      - place_name (str)              -> if not "user_location", try areaId()
+      - center (lat, lon)             -> for around: queries
+      - radius (int, meters)          -> search radius (will be clamped)
+    """
+    # --- helper to append filters safely ---
     selector_parts = []
+
+    # primary (key=value)
     if P.get("tag_key") and P.get("tag_value"):
         selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
+
+    # optional modifiers you already support
     if P.get("wheelchair_only"):
         selector_parts.append('"wheelchair"="yes"')
+
     if P.get("pet_friendly"):
         selector_parts.append('"pets"="yes"')
-    if P.get("opening_hours_regex"):
-        selector_parts.append(f'"opening_hours"~"{P["opening_hours_regex"]}"')
 
-    selector = " and ".join(selector_parts) if selector_parts else ""
+    if P.get("opening_hours_regex"):
+        # escape double quotes if any
+        oh = str(P["opening_hours_regex"]).replace('"', r'\"')
+        selector_parts.append(f'"opening_hours"~"{oh}"')
+
+    # You can add more optional filters here, e.g.:
+    # if P.get("cuisine"): selector_parts.append(f'"cuisine"="{P["cuisine"]}"')
+    # if P.get("name_regex"): selector_parts.append(f'"name"~"{P["name_regex"]}"')
+
+    selector = " and ".join(selector_parts)
     selector_brackets = f"[{selector}]" if selector else ""
 
-    # Prefer area queries when we have a clear place name (other than user_location)
-    if P.get("place_name") and P["place_name"] != "user_location":
+    # --- clamp radius for safety ---
+    radius = int(P.get("radius", 1000) or 1000)
+    radius = max(50, min(radius, 5000))  # 50 m .. 5 km
+
+    # --- branch 1: area query (only if we actually have a selector) ---
+    place_name = P.get("place_name")
+    if place_name and place_name != "user_location" and selector:
         try:
-            area_id = _osm_nominatim.query(P["place_name"]).areaId()
+            area_id = _osm_nominatim.query(place_name).areaId()
             return (
                 f'[out:json][timeout:25];'
                 f'(node(area:{area_id}){selector_brackets};'
                 f'way(area:{area_id}){selector_brackets};'
-                f'relation(area:{area_id}){selector_brackets};);out body;'
+                f'relation(area:{area_id}){selector_brackets};);'
+                f'out body;'
             )
         except Exception as e:
-            print(f"⚠️ Failed to get areaId for {P['place_name']}: {e}")
+            print(f"⚠️ Failed to get areaId for {place_name}: {e}")
 
-    # Otherwise use around(center, radius)
-    if P.get("center") and P.get("radius"):
+    # --- branch 2: around(center, radius) ---
+    if P.get("center"):
         lat, lon = P["center"]
-        radius = P["radius"]
+
+        # Guardrail: if we have NO selector, return a tiny nodes-only query
+        # to avoid pulling tens of thousands of elements.
+        if not selector:
+            tiny = min(radius, 250)  # keep it small when unfiltered
+            return (
+                f'[out:json][timeout:25];'
+                f'(node(around:{tiny},{lat},{lon}););'
+                f'out body;'
+            )
+
+        # Normal filtered query: nodes + ways + relations
         return (
             f'[out:json][timeout:25];'
             f'(node(around:{radius},{lat},{lon}){selector_brackets};'
             f'way(around:{radius},{lat},{lon}){selector_brackets};'
-            f'relation(around:{radius},{lat},{lon}){selector_brackets};);out body;'
+            f'relation(around:{radius},{lat},{lon}){selector_brackets};);'
+            f'out body;'
         )
 
-    raise ValueError("❌ Cannot build query: no area or coordinates available.")
+    # --- if we got here, we have neither usable area nor center ---
+    # Don’t generate an unbounded query.
+    raise ValueError("❌ Cannot build query: need a place_name with selector or a center coordinate.")
