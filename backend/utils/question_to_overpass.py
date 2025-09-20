@@ -302,25 +302,20 @@ def parse_question(raw_q: str, lat: float = None, lon: float = None) -> Dict:
     return P
 
 # ========= QUERY BUILDER (with guardrails) =========
-def build_overpass_query(P: Dict) -> str:
+def build_overpass_query(P):
     """
-    Build Overpass QL query from params P with strict guardrails:
-      - If we have a selector (tag filters), use area (if named place) or around(center,radius) with nodes+ways+relations.
-      - If we have NO selector, never query widely: return a tiny nodes-only around() (min(radius, 250m)).
-      - Never emit an unbounded query.
+    Build Overpass QL query safely.
+    Uses `out tags center qt <limit>;` so ways/relations include a centroid,
+    and caps rows to avoid huge payloads.
     """
-    # Collect filter parts
+    # ---- filters ----
     selector_parts = []
-
     if P.get("tag_key") and P.get("tag_value"):
         selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
-
     if P.get("wheelchair_only"):
         selector_parts.append('"wheelchair"="yes"')
-
     if P.get("pet_friendly"):
         selector_parts.append('"pets"="yes"')
-
     if P.get("opening_hours_regex"):
         oh = str(P["opening_hours_regex"]).replace('"', r'\"')
         selector_parts.append(f'"opening_hours"~"{oh}"')
@@ -328,11 +323,12 @@ def build_overpass_query(P: Dict) -> str:
     selector = " and ".join(selector_parts)
     selector_brackets = f"[{selector}]" if selector else ""
 
-    # Clamp radius
-    radius = int(P.get("radius", DEFAULT_RADIUS) or DEFAULT_RADIUS)
+    # ---- knobs ----
+    radius = int(P.get("radius", 1000) or 1000)
     radius = max(50, min(radius, 5000))
+    out_limit = int(P.get("out_limit", 300))  # ✅ cap results from Overpass
 
-    # Prefer area query only when we actually have a selector (to avoid pointless area sweeps)
+    # ---- area branch (only if we have a selector) ----
     place_name = P.get("place_name")
     if place_name and place_name != "user_location" and selector:
         try:
@@ -342,30 +338,31 @@ def build_overpass_query(P: Dict) -> str:
                 f'(node(area:{area_id}){selector_brackets};'
                 f'way(area:{area_id}){selector_brackets};'
                 f'relation(area:{area_id}){selector_brackets};);'
-                f'out body;'
+                f'out tags center qt {out_limit};'
             )
         except Exception as e:
             print(f"⚠️ Failed to get areaId for {place_name}: {e}")
 
-    # around(center, radius)
+    # ---- around() branch ----
     if P.get("center"):
         lat, lon = P["center"]
+
+        # Tagless guardrail: tiny, nodes-only, still capped
         if not selector:
-            # Guardrail: tagless query → tiny nodes-only to avoid 50k+ elements
             tiny = min(radius, 250)
             return (
                 f'[out:json][timeout:25];'
                 f'(node(around:{tiny},{lat},{lon}););'
-                f'out body;'
+                f'out tags center qt {min(out_limit, 200)};'
             )
-        # Normal filtered query
+
+        # Normal filtered query: nodes + ways + relations, capped
         return (
             f'[out:json][timeout:25];'
             f'(node(around:{radius},{lat},{lon}){selector_brackets};'
             f'way(around:{radius},{lat},{lon}){selector_brackets};'
             f'relation(around:{radius},{lat},{lon}){selector_brackets};);'
-            f'out body;'
+            f'out tags center qt {out_limit};'
         )
 
-    # If neither area nor center is usable, refuse to build a query
     raise ValueError("❌ Cannot build query: need a place_name with selector or a center coordinate.")
