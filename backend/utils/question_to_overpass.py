@@ -12,6 +12,7 @@ from deep_translator import GoogleTranslator
 from geoparser import Geoparser
 from OSMPythonTools.overpass import Overpass, overpassQueryBuilder
 from OSMPythonTools.nominatim import Nominatim as OSMToolsNominatim
+from utils.osm_value_resolver import resolve_tag_from_values
 
 # =============== Global NLP ===============
 @lru_cache()
@@ -148,12 +149,20 @@ def parse_question(raw_q, lat=None, lon=None):
 
     # (2) Detect tags (pharmacy, cafe, etc.)
     tags = find_osm_tags(q)
+    if not tags:
+        # 🔁 Data-driven fallback using your OSM values cache (no hardcoding)
+        try:
+            r = resolve_tag_from_values(q)  # or use raw_q if you prefer
+            if r:
+                k, v, score = r
+                tags = {k: v}
+                print(f"🏷️ Fallback tag from values: {k}={v} (score={score})")
+        except Exception as e:
+            print(f"⚠️ Value resolver failed: {e}")
+
     if tags:
         k, v = next(iter(tags.items()))
-        P.update({
-            "tag_key": k,
-            "tag_value": v,
-        })
+        P.update({"tag_key": k, "tag_value": v})
         print(f"🏷️ Detected tag from text: {k}={v}")
 
     # (3) NER / regex location candidates
