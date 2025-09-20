@@ -326,6 +326,7 @@ def run_osm(
             kind_str = f" ({kind})" if kind else ""
             lines.append(f"{i}. {name}{kind_str} — {dist} meters away.")
         spoken_text = "Here are the closest places: " + " ".join(lines)
+        # print(spoken_text, flush=True)
 
     # ---- TTS ----
     model_path = find_best_piper_model(MODEL_DIR, language, speaker)
@@ -726,28 +727,31 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    def run_once(text_value: str):
-        return main(
-            speaker=args.speaker,
-            language=args.language,
-            speed=args.speed,
-            text=text_value,
-            text_file=args.text_file,
-            output_mode=args.output_mode,
-            force_mode=args.force_mode,
-            save_txt=args.save_txt,
-            system_prompt=args.system_prompt,
-            max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            ctx=args.ctx,
-            threads=args.threads,
-            bitnet_bin=args.bitnet_bin,
-            bitnet_model=args.bitnet_model,
-            extra_args=args.extra_args,
-            lat=args.lat,
-            lon=args.lon,
-        )
+def run_once(text_value: str):
+    return main(
+        speaker=args.speaker,
+        language=args.language,
+        speed=args.speed,
+        text=text_value,
+        text_file=args.text_file,
+        output_mode=args.output_mode,
+        force_mode=args.force_mode,
+        save_txt=args.save_txt,
+        system_prompt=args.system_prompt,
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        ctx=args.ctx,
+        threads=args.threads,
+        bitnet_bin=args.bitnet_bin,
+        bitnet_model=args.bitnet_model,
+        extra_args=args.extra_args,
+        lat=args.lat,
+        lon=args.lon,
+        radius_m=args.radius_m,
+        out_limit=args.out_limit,
+        k_nearest=args.k_nearest,
+    )
 
     if args.loop:
         current_text = args.text
