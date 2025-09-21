@@ -3,7 +3,7 @@ extends Node3D
 
 class_name BoundaryDetector
 
-var CELL_LENGTH = 50
+var CELL_LENGTH = 150
 var current_cell: Vector2i = Vector2i.ZERO
 
 var LoadedCels: Dictionary = {}
@@ -11,12 +11,14 @@ var LoadedCels: Dictionary = {}
 var player: CharacterBody3D
 var buildings_node: Node3D
 var places_node: Node3D
+var polygons_node: Node3D
 
 func _ready():
 	# Get references to player and data nodes
 	player = get_node("../Player")
 	buildings_node = get_node("../Buildings")
 	places_node = get_node("../Places")
+	polygons_node = get_node("../Polygons")
 	
 	# Initialize current cell based on player position
 	if player:
@@ -99,13 +101,23 @@ func _clear_existing_data():
 	if places_node:
 		for child in places_node.get_children():
 			child.queue_free()
+	
+	# Clear polygons
+	if polygons_node:
+		for child in polygons_node.get_children():
+			child.queue_free()
 
 func _fetch_new_area_data(bounds: Dictionary):
 	print("🌐 Fetching new area data for bounds: ", bounds)
 	if buildings_node and buildings_node.has_method("query_buildings_with_bounds"):
+		print("🏗️ Querying buildings...")
 		await buildings_node.query_buildings_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
 	if places_node and places_node.has_method("query_places_with_bounds"):
+		print("🏪 Querying places...")
 		await places_node.query_places_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
+	if polygons_node and polygons_node.has_method("query_polygons_with_bounds"):
+		print("🌿 Querying polygons...")
+		await polygons_node.query_polygons_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
 
 # Get the current grid cell
 func get_current_cell() -> Vector2i:

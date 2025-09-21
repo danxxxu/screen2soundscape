@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://cwrxsfnvowad6"]
+[gd_scene load_steps=20 format=3 uid="uid://cwrxsfnvowad6"]
 
 [ext_resource type="Script" uid="uid://bdtpbysod7l3" path="res://src/buildings.gd" id="1_buildings"]
 [ext_resource type="AudioStream" uid="uid://d21tjv3cyi4b2" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
@@ -9,6 +9,7 @@
 [ext_resource type="AudioStream" uid="uid://dpdbytt4atqal" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://cyxe536c4i73x" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
 [ext_resource type="Script" uid="uid://brwups7vr8tqw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
+[ext_resource type="Script" uid="uid://cvlxkdiv3tgyr" path="res://src/polygons.gd" id="10_7ftgl"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -136,3 +137,6 @@ script = ExtResource("9_3ingr")
 
 [node name="boundary_detector" type="Node3D" parent="."]
 script = ExtResource("1_tpwpp")
+
+[node name="Polygons" type="Node3D" parent="."]
+script = ExtResource("10_7ftgl")

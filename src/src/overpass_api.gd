@@ -241,3 +241,103 @@ func query_places(lat1: float, lon1: float, lat2: float, lon2: float) -> Diction
 	else:
 		print("❌ HTTP Error: ", response_code)
 		return {"places_data": {}} 
+
+# Function to query landuse polygons for 'grass' and 'meadow'
+func query_landuse_polygons(lat1: float, lon1: float, lat2: float, lon2: float) -> Dictionary:
+	"""
+	Query landuse polygons from Overpass API using real world coordinates
+	lat1, lon1: First corner of bounding box
+	lat2, lon2: Second corner of bounding box
+	Returns: Dictionary with polygon_data and node_data
+	"""
+	
+	# Ensure proper bounding box order (min_lat, min_lon, max_lat, max_lon)
+	var min_lat = min(lat1, lat2)
+	var min_lon = min(lon1, lon2)
+	var max_lat = max(lat1, lat2)
+	var max_lon = max(lon1, lon2)
+	
+	print("📍 Bounding box: ", min_lat, ",", min_lon, " to ", max_lat, ",", max_lon)
+	print("🌿 Querying Overpass API for landuse polygons...")
+
+	# bbox as string
+	var bbox = "(%f,%f,%f,%f)" % [min_lat, min_lon, max_lat, max_lon]
+
+	# selectors with single quotes → cleaner, no escaping needed
+	var selectors = [
+		"way['landuse'='grass']",
+		"relation['landuse'='grass']",
+		"way['landuse'='meadow']",
+		"relation['landuse'='meadow']",
+		"way['natural'='grassland']",
+		"relation['natural'='grassland']",
+		"way['landcover'='grass']",
+		"relation['landcover'='grass']",
+		"way['surface'='grass']['area'='yes']",
+		"relation['surface'='grass']['area'='yes']",
+	]
+
+	# build body dynamically
+	var body_text = ""
+	for sel in selectors:
+		body_text += "  %s%s;\n" % [sel, bbox]
+
+	# full query
+	var query = "[out:json][timeout:25];\n(\n" + body_text + ");\nout body;\n>;\nout skel qt;\n"
+
+	# Create HTTP request
+	var http_request = HTTPRequest.new()
+	add_child(http_request)
+	
+	# Make the request to Overpass API
+	var overpass_url = "https://overpass-api.de/api/interpreter"
+	var headers = ["Content-Type: application/x-www-form-urlencoded"]
+	
+	print("🚀 Sending landuse query to Overpass API...")
+	var error = http_request.request(overpass_url, headers, HTTPClient.METHOD_POST, "data=" + query.uri_encode())
+	
+	if error != OK:
+		print("❌ Error making HTTP request: ", error)
+		http_request.queue_free()
+		return {"polygon_data": {}, "node_data": {}}
+	
+	# Wait for response
+	var result = await http_request.request_completed
+	http_request.queue_free()
+	
+	var response_code = result[1]
+	var body = result[3]
+	
+	print("📥 Overpass API landuse response received. Code: ", response_code)
+	
+	if response_code == 200:
+		var json_string = body.get_string_from_utf8()
+		var json = JSON.new()
+		var parse_error = json.parse(json_string)
+		
+		if parse_error == OK:
+			var polygon_data = json.get_data()
+			var node_data = {}
+			
+			# Process the data and extract node coordinates
+			if polygon_data.has("elements"):
+				# First, collect all node coordinates
+				for element in polygon_data.elements:
+					if element.type == "node":
+						node_data[element.id] = {
+							"lat": element.lat,
+							"lon": element.lon
+						}
+				print('✅ Loaded ', polygon_data.elements.size(), ' landuse elements from Overpass API')
+				print('📍 Extracted ', node_data.size(), ' node coordinates')
+				
+				return {"polygon_data": polygon_data, "node_data": node_data}
+			else:
+				print("❌ No landuse elements found in Overpass response")
+				return {"polygon_data": {}, "node_data": {}}
+		else:
+			print("❌ JSON Parse Error: ", json.get_error_message())
+			return {"polygon_data": {}, "node_data": {}}
+	else:
+		print("❌ HTTP Error: ", response_code)
+		return {"polygon_data": {}, "node_data": {}} 

@@ -9,7 +9,9 @@ const MAP_SIZE = Vector3(MAP_SIDE_LENGTH, 0, MAP_SIDE_LENGTH)
 const GRID_STEP = 5.0
 
 
-static var start = Vector2(52.372099, 4.892923)
+
+#static var start = Vector2(52.372099, 4.892923)
+static var start = Vector2(52.075836, 4.287392)
 
 # Scale factor to convert degrees to local units
 const SCALE_FACTOR = 200

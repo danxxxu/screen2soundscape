@@ -6,6 +6,31 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 import run_assistant
 from utils.transcribe import transcribe_base64_audio
 
+TAGS = [
+    ['access', 'university'], ['aeroway', 'helipad'], ['amenity', 'atm'], ['amenity', 'atm', 'symbol'],
+    ['amenity', 'bank'], ['amenity', 'bank', 'symbol'], ['amenity', 'bar'], ['amenity', 'bicycle', 'parking'],
+    ['amenity', 'bicycle', 'rental'], ['amenity', 'bus', 'station'], ['amenity', 'cafe'], ['amenity', 'clinic'],
+    ['amenity', 'dentist'], ['amenity', 'fastfood'], ['amenity', 'fire', 'station'], ['amenity', 'fountain'],
+    ['amenity', 'fuel'], ['amenity', 'hospital'], ['amenity', 'parking', 'entrance'],
+    ['amenity', 'parking', 'space'], ['amenity', 'parking', 'symbol'], ['amenity', 'pharmacy'],
+    ['amenity', 'police'], ['amenity', 'post', 'office'], ['amenity', 'pub'], ['amenity', 'pub', 'symbol'],
+    ['amenity', 'restaurant'], ['amenity', 'school'], ['amenity', 'school', 'symbol'], ['amenity', 'toilets'],
+    ['amenity', 'university'], ['barrier', 'gate', 'symbol'], ['barrier', 'hedge'], ['barrier', 'wall'],
+    ['building', 'garage', 'symbol'], ['bus', 'stop'], ['charging', 'station'], ['events', 'venue'],
+    ['hairdresser', 'symbol'], ['highway', 'bus', 'stop'], ['highway', 'crossing'], ['highway', 'footway'],
+    ['highway', 'primary'], ['highway', 'residential'], ['highway', 'service'], ['highway', 'tertiary'],
+    ['highway', 'track'], ['highway', 'unclassified'], ['ice', 'cream'], ['landuse', 'farmland'],
+    ['landuse', 'farmland', 'symbol'], ['landuse', 'forest'], ['landuse', 'grass'], ['landuse', 'meadow'],
+    ['landuse', 'railway'], ['language', 'school'], ['leisure', 'park'], ['loading', '1'], ['loading', '2'],
+    ['loading', 'dock'], ['location', 'forestpark'], ['location', 'park2'], ['location', 'store door'],
+    ['natural', 'tree'], ['natural', 'water'], ['natural', 'wetland'], ['natural', 'wood'],
+    ['navigation', 'footsteps', 'wet1'], ['post', 'office'], ['power', 'generator'], ['power', 'pole'],
+    ['power', 'tower'], ['railway', 'station'], ['shop', 'bakery'], ['shop', 'clothes'], ['shop', 'convenience'],
+    ['shop', 'supermarket'], ['social', 'centre'], ['social', 'facility'], ['surface', 'asphalt'],
+    ['surface', 'paved'], ['surface', 'unpaved'], ['tourism', 'attraction'], ['tourism', 'hotel'],
+    ['type', 'street'], ['waterway', 'stream']
+]
+
 
 class AudioStreamConsumer(AsyncWebsocketConsumer):
     DEFAULT_SPEAKER = "amy"

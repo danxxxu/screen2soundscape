@@ -7,6 +7,7 @@ var current_place: Node3D = null
 var player: Node3D = null
 var websocket_audio_player: Node
 var boundary_detector: BoundaryDetector
+var polygons_system: Node3D
 
 func _ready():
 	command_label = Label.new()
@@ -30,6 +31,14 @@ func _ready():
 	add_child(boundary_detector)
 		
 	print("🔲 Boundary detector initialized")
+	
+	# Initialize polygons system
+	polygons_system = Node3D.new()
+	polygons_system.name = "Polygons"
+	polygons_system.set_script(preload("res://src/polygons.gd"))
+	add_child(polygons_system)
+		
+	print("🌿 Polygons system initialized")
 
 
 func update_command_label():

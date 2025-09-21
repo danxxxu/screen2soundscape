@@ -1,8 +1,8 @@
 extends CharacterBody3D
 
 # How fast the player moves in meters per second.
-#@export var speed = 50
-@export var speed = 14
+@export var speed = 30
+#@export var speed = 14
 # The downward acceleration when in the air, in meters per second squared.
 @export var fall_acceleration = 75
 
@@ -20,6 +20,8 @@ var target_velocity = Vector3.ZERO
 @onready var zero_velocity_timer := $zero_velocity_timer
 @onready var rotate_audio := $rotate_audio
 @onready var proximity_detector := $proximity_detector
+@onready var in_polygon_checker := InPolygonChecker.new()
+
 
 var min_distance: float = 5.0  # Closest distance (highest pitch)
 var max_distance: float = 300.0 # Farthest distance (lowest pitch)
@@ -29,8 +31,8 @@ var max_pitch: float    = 2.0      # Highest pitch
 var pitch_range: float = 0.5  # How much the pitch can vary
 
 #preload different footstep sounds, still working on it 
-#const footstep_grass = preload("res://sounds/footsteps/footstep_grass.wav")
-#const footstep_concrete = preload("res://sounds/footsteps/footstep_concrete.wav")
+const footstep_grass = preload("res://assets/audio/footsteps/footstep_grass.wav")
+const footstep_concrete = preload("res://assets/audio/footsteps/footstep_concrete.wav")
 
 var _movement_enabled: bool = true
 var is_sliding: bool = false
@@ -38,6 +40,9 @@ var was_moving: bool = false
 var current_rotation: float = 0.0
 var is_near_buildings: bool = false
 var building_proximity_areas: Array = []
+var current_surface_type: String = "concrete"  # Track current surface type
+var last_surface_check_pos: Vector3 = Vector3.ZERO  # Last position where we checked surface
+var surface_check_distance: float = 5.0  # Check surface type every 5 units
 
 # Microphone recording variables
 var is_recording: bool = false
@@ -72,6 +77,8 @@ func _input(event):
 				start_recording()
 			elif not event.pressed and event.keycode == KEY_T:
 				stop_recording()
+			if event.pressed and event.keycode == KEY_F:
+				force_surface_check()
 
 
 func _process(delta):
@@ -160,6 +167,13 @@ func _ready():
 	zero_velocity_timer.one_shot = true
 	zero_velocity_timer.wait_time = 0.2  # Half a second
 	zero_velocity_timer.timeout.connect(_on_zero_velocity_timeout)
+	
+	# Setup polygon checker
+	add_child(in_polygon_checker)
+	
+	# Initialize surface checking
+	last_surface_check_pos = global_position
+	current_surface_type = "concrete"  # Default to concrete
 
 func _on_body_entered(body):
 	#print("Body entered signal received")
@@ -279,17 +293,70 @@ func _physics_process(delta):
 		if rotate_audio.playing:
 			rotate_audio.stop()
 
+# Check surface type at current position
+func check_surface_type():
+	var current_pos = global_position
+	var distance_moved = current_pos.distance_to(last_surface_check_pos)
+	
+	# Only check surface type if we've moved far enough
+	if distance_moved >= surface_check_distance:
+		last_surface_check_pos = current_pos
+		
+		# Check if player is inside any grass or meadow polygon
+		var player_pos = Vector2(current_pos.x, current_pos.z)
+		var is_in_grass = false
+		
+		# Only check if in_polygon_checker is available
+		if in_polygon_checker and in_polygon_checker.has_method("query_landuse_polygons"):
+			var polygons = in_polygon_checker.query_landuse_polygons()
+			if polygons.size() > 0:
+				for polygon in polygons:
+					if InPolygonChecker.is_point_in_polygon(player_pos, polygon):
+						is_in_grass = true
+						break
+		
+		# Update current surface type
+		current_surface_type = "grass" if is_in_grass else "concrete"
+		
+		# Debug output (can be removed in production)
+		if is_in_grass:
+			print("🌿 Surface changed to grass")
+		else:
+			print("🏗️ Surface changed to concrete")
+
+# Force surface type check (useful for debugging)
+func force_surface_check():
+	last_surface_check_pos = Vector3(-999, -999, -999)  # Force check
+	check_surface_type()
+	print("🔍 Forced surface check - current type: ", current_surface_type)
+
+# Get current surface type
+func get_current_surface_type() -> String:
+	return current_surface_type
+
 # footstep sounds
 func footstep(vel):
-	#$footstep.stream = footstep_concrete
-	if(vel.length() != 0):
-		if($Timer.time_left <= 0):
+	if vel.length() != 0:
+		# Check surface type periodically
+		check_surface_type()
+		
+		if $Timer.time_left <= 0:
+			# Play appropriate footstep sound based on current surface type
+			if current_surface_type == "grass" and footstep_grass:
+				$footstep.stream = footstep_grass
+			elif footstep_concrete:
+				$footstep.stream = footstep_concrete
+			else:
+				# Fallback if no footstep sounds are loaded
+				print("⚠️ No footstep sounds loaded")
+				return
+			
 			$footstep.pitch_scale = randf_range(0.8, 1.2)
 			$footstep.play()
-#			walk cycle/loop length 
+			# Walk cycle/loop length 
 			$Timer.start(0.3)
 	else:
-		$footstep.stream_paused=true
+		$footstep.stream_paused = true
 
 func update_houses_volume():
 	if not houses_audio.playing:
