@@ -87,6 +87,15 @@ _NEARBY_WORDS_EN = r"(near( me|by)?|closest|around|in the area|near to|near\s+me
 _ROUTE_WORDS_EN  = r"(route|directions|navigate|how to get|way to|get to|walk|bike|drive|bus|tram|subway|metro)"
 _OSM_TERMS_EN    = r"(amenity|highway|shop|leisure|tourism|public\s*transport|osm|overpass|bbox|coordinates?)"
 _COORDS_RE       = re.compile(r"\b(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\b")
+# Listing / brand cues (general info, not map)
+_LISTING_CUES_EN = re.compile(r"\b(list|names?|examples?|give me|show me)\b", re.IGNORECASE)
+_BRAND_CUES_EN   = re.compile(r"\b(brands?|chains?)\b", re.IGNORECASE)
+
+# A simple locality cue: "in <Place Name>" (e.g., "in Utrecht")
+_IN_PLACE_EN = re.compile(
+    r"\b(in|within|around)\s+(the\s+)?([A-Z][\w\-]+(?:\s+[A-Z][\w\-]+)*)\b",
+    re.IGNORECASE
+)
 
 # NEW: strong “general” cues — if present, we avoid OSM unless there are explicit map cues
 _GENERAL_CUES_EN = re.compile(
@@ -107,10 +116,6 @@ def _to_english(text: str) -> str:
 
 
 def is_osm_query(question: str) -> bool:
-    """
-    Route to OSM only when the text clearly looks like a map/search/routing request.
-    Passing lat/lon via CLI must NOT influence this decision.
-    """
     q_orig = (question or "").strip()
     q_en = _to_english(q_orig)
 
@@ -119,11 +124,24 @@ def is_osm_query(question: str) -> bool:
     has_coords_in_text  = bool(_COORDS_RE.search(q_en))
     has_osm_words       = bool(re.search(_OSM_TERMS_EN, q_en))
     tags_detected       = bool(find_osm_tags(q_orig) or find_osm_tags(q_en))
+    in_named_place      = bool(_IN_PLACE_EN.search(q_en))
 
-    if looks_general and not (has_nearby_or_route or has_coords_in_text or has_osm_words or tags_detected):
+    wants_list_or_brand = bool(_LISTING_CUES_EN.search(q_en) or _BRAND_CUES_EN.search(q_en))
+
+    # If it looks like a general/explanatory request and lacks strong locality cues, keep it out of OSM.
+    if looks_general and not (has_nearby_or_route or has_coords_in_text or has_osm_words or in_named_place or tags_detected):
         return False
 
-    return any([has_nearby_or_route, has_coords_in_text, has_osm_words, tags_detected])
+    # If user asks for a list/brands and there's NO locality cue, treat as general knowledge, not map.
+    if wants_list_or_brand and not (has_nearby_or_route or has_coords_in_text or has_osm_words or in_named_place):
+        return False
+
+    # Mentioning an OSM category/tag alone is NOT enough; require locality or OSM/coords/bbox/“in <place>”
+    if tags_detected and not (has_nearby_or_route or has_coords_in_text or has_osm_words or in_named_place):
+        return False
+
+    # Otherwise, OSM intent if any strong locality cue is present.
+    return any([has_nearby_or_route, has_coords_in_text, has_osm_words, in_named_place])
 
 
 # ---------- Optional: OSRM routing ----------
