@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bd8ljp4lxohf1"
+path="res://.godot/imported/Shake and Bake.mp3-3a3a253c67e443229d08e60e6958218d.mp3str"
+
+[deps]
+
+source_file="res://assets/audio/Shake and Bake.mp3"
+dest_files=["res://.godot/imported/Shake and Bake.mp3-3a3a253c67e443229d08e60e6958218d.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

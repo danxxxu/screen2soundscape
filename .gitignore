@@ -50,3 +50,5 @@ saved_questions/
 
 # Misc
 *.lock
+
+src/.godot/
