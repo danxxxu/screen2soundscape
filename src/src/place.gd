@@ -17,7 +17,7 @@ var label: Label3D
 
 func _ready():
 	mesh_instance = $MeshInstance3D
-	audio_player = $AudioStreamPlayer3D
+	audio_player = $name_audio
 	ambient_player = $ambient_audio
 	area = $Area3D
 	label = $MeshInstance3D/Label3D
@@ -56,34 +56,6 @@ func _setup_place_data():
 	if place_data.sound:
 		audio_player.stream = place_data.sound
 
-	# Assign ambient sound based on type
-	var allowed = [
-		  "Park",
-		  "Railway",
-		  "Sidewalk",
-		  "atm",
-		  "attraction",
-		  "bank",
-		  "bus_station",
-		  "cafe",
-		  "pub",
-		  "convenience",
-		  "clothes",
-		  "firestation",
-		  "fuel",
-		  "hospital",
-		  "hotel",
-		  "pharmacy",
-		  "police",
-		  "post_office",
-		  "restaurant",
-		  "school",
-		  "supermarket",
-		  "toilets",
-		  "trainstation",
-		  "university",
-		  "unknown",
-	]
 	if place_data.type and place_data.category:
 		var type = place_data.category + "_"+ place_data.type
 		var sound_path = "res://assets/audio/places/" + type + ".mp3"
