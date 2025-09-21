@@ -51,4 +51,14 @@ saved_questions/
 # Misc
 *.lock
 
+node_modules/
+
+backend/.condaenv/
+
+backend/piper_models/
+
+*.sqlite3
+
 src/.godot/
+
+*.tmp

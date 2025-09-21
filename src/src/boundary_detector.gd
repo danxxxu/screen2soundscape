@@ -24,6 +24,17 @@ func _ready():
 	if player:
 		_update_current_cell()
 		print("🔲 Boundary detector initialized at cell: ", current_cell)
+		const prefetch_cells = [
+			Vector2i(0,0),
+			Vector2i(0,-1),
+			Vector2i(-1,0),
+			Vector2i(-1,-1)			
+		]
+		for cell in prefetch_cells:
+			var bounds = _calculate_cell_bounds(cell)
+			var key: String = "%d,%d" % [cell.x, cell.y]
+			await _fetch_new_area_data(bounds)
+			LoadedCels[key] = true
 
 func _process(_delta):
 	if player and Engine.is_editor_hint():
