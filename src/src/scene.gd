@@ -25,10 +25,8 @@ func _ready():
 	# Start WebSocket connection
 	websocket_audio_player.connect_to_server()
 	
-	# Initialize boundary detector
-	boundary_detector = Node3D.new()
-	boundary_detector.set_script(preload("res://src/boundary_detector.gd"))
-	add_child(boundary_detector)
+	# Get the existing boundary detector from the scene
+	boundary_detector = get_node("boundary_detector") as BoundaryDetector
 		
 	print("🔲 Boundary detector initialized")
 	
@@ -214,26 +212,21 @@ func _process_nominatim_result(result: Dictionary, location: String):
 func _clear_and_refetch_data():
 	print("🧹 Clearing existing data...")
 	
-	# Get the boundary detector from the scene
-	var boundary_detector_node = get_node("boundary_detector")
-	if not boundary_detector_node:
-		print("❌ Boundary detector node not found")
+	if not boundary_detector:
+		print("❌ Boundary detector not found")
 		return
 	
 	# Clear existing data using boundary detector's method
-	if boundary_detector_node.has_method("_clear_existing_data"):
-		boundary_detector_node._clear_existing_data()
-		print("🧹 Cleared existing data")
+	boundary_detector._clear_existing_data()
+	print("🧹 Cleared existing data")
 	
 	# Clear loaded cells and reset boundary detector
-	if boundary_detector_node.has_method("get") and boundary_detector_node.has("LoadedCels"):
-		boundary_detector_node.LoadedCels.clear()
-		boundary_detector_node.current_cell = Vector2i.ZERO
-		print("🔄 Reset boundary detector")
+	boundary_detector.LoadedCels.clear()
+	boundary_detector.current_cell = Vector2i.ZERO
+	print("🔄 Reset boundary detector")
 	
 	# Force boundary check to load new area around the new start location
-	if boundary_detector_node.has_method("force_boundary_check"):
-		print("🌐 Fetching data for new area...")
-		await boundary_detector_node.force_boundary_check()
+	print("🌐 Fetching data for new area...")
+	await boundary_detector.force_boundary_check()
 	
 	print("✅ Data cleared and refetched for new location")
