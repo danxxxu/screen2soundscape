@@ -75,6 +75,7 @@ func _input(event):
 					Speaker.speak('To the elevator')
 			if event.pressed and event.keycode == KEY_T:
 				start_recording()
+				
 			elif not event.pressed and event.keycode == KEY_T:
 				stop_recording()
 			if event.pressed and event.keycode == KEY_F:

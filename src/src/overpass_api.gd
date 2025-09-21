@@ -1,7 +1,8 @@
 @tool
 extends Node
 class_name OverpassAPI
-
+#const overpass_url = 'http://142.93.234.209/api/interpreter'
+const overpass_url = 'https://overpass-api.de/api/interpreter'
 const TAGS = [
 	['access', 'university'],
 	['aeroway', 'helipad'],

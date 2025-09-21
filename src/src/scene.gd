@@ -53,6 +53,11 @@ func update_command_label():
 			player.set_movement_enabled(true)  # Re-enable player movement
 
 func execute_command(cmd: String):
+	if cmd.begins_with("goto "):
+		var location = cmd.substr(5).strip_edges()  # Remove "goto " prefix
+		await _handle_goto_command(location)
+		return
+	
 	match cmd.to_lower():
 		"address":
 			if current_place and current_place.place_data:
@@ -80,7 +85,7 @@ func _input(event):
 			if event.keycode == KEY_ENTER:
 				if command_mode:
 					# Execute command
-					execute_command(current_command)
+					await execute_command(current_command)
 					current_command = ""
 					command_mode = false
 				else:
@@ -107,3 +112,128 @@ func _on_place_entered(place: Node3D):
 func _on_place_exited(place: Node3D):
 	if current_place == place:
 		current_place = null
+
+# Handle goto command - search for location and update start position
+func _handle_goto_command(location: String):
+	print("🗺️ Searching for location: ", location)
+	
+	# Show loading message
+	command_label.text = "> Searching for " + location + "..."
+	
+	# URL encode the location
+	var encoded_location = location.uri_encode()
+	var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encoded_location
+	
+	print("🌐 Making request to: ", url)
+	
+	# Use await approach - much simpler!
+	var result = await _make_http_request(url)
+	
+	if result == null:
+		print("❌ Request failed or timed out")
+		command_label.text = "> Error: Failed to search for location"
+		return
+	
+	# Process the result
+	await _process_nominatim_result(result, location)
+
+# Make HTTP request using await
+func _make_http_request(url: String) -> Dictionary:
+	var http_request = HTTPRequest.new()
+	http_request.use_threads = true
+	add_child(http_request)
+	
+	# Wait for the request to complete
+	var error = http_request.request(url)
+	if error != OK:
+		print("❌ Failed to make HTTP request: ", error)
+		http_request.queue_free()
+		return {}
+	
+	# Wait for response with timeout
+	var response = await http_request.request_completed
+	http_request.queue_free()
+	
+	print("📡 Received response: ", response[1])  # response_code is at index 1
+	
+	if response[1] != 200:  # response_code
+		print("❌ HTTP error: ", response[1])
+		return {}
+	
+	return {
+		"result": response[0],
+		"response_code": response[1], 
+		"headers": response[2],
+		"body": response[3]
+	}
+
+# Process Nominatim API result
+func _process_nominatim_result(result: Dictionary, location: String):
+	var body = result["body"]
+	print("📦 Processing response body, size: ", body.size(), " bytes")
+	
+	# Parse JSON response
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	
+	if parse_result != OK:
+		print("❌ Failed to parse JSON response")
+		command_label.text = "> Error: Invalid response from server"
+		return
+	
+	var data = json.data
+	if not data is Array or data.size() == 0:
+		print("❌ No results found for location: ", location)
+		command_label.text = "> No results found for: " + location
+		return
+	
+	# Get the first result
+	var nom_result = data[0]
+	var lat = float(nom_result["lat"])
+	var lon = float(nom_result["lon"])
+	var display_name = nom_result["display_name"]
+	
+	print("📍 Found location: ", display_name)
+	print("📍 Coordinates: ", lat, ", ", lon)
+	
+	# Update the start location in MapUtils
+	MapUtils.start = Vector2(lat, lon)
+	print("🔄 Updated start location to: ", MapUtils.start)
+	
+	# Clear existing data and refetch for new area using boundary detector
+	await _clear_and_refetch_data()
+	
+	# Move player to new location (center of map)
+	if player:
+		player.global_position = Vector3(0, player.global_position.y, 0)
+		print("🚶 Moved player to center of new area")
+	
+	command_label.text = "> Moved to: " + display_name
+
+# Clear existing data and refetch for new area using boundary detector
+func _clear_and_refetch_data():
+	print("🧹 Clearing existing data...")
+	
+	# Get the boundary detector from the scene
+	var boundary_detector_node = get_node("boundary_detector")
+	if not boundary_detector_node:
+		print("❌ Boundary detector node not found")
+		return
+	
+	# Clear existing data using boundary detector's method
+	if boundary_detector_node.has_method("_clear_existing_data"):
+		boundary_detector_node._clear_existing_data()
+		print("🧹 Cleared existing data")
+	
+	# Clear loaded cells and reset boundary detector
+	if boundary_detector_node.has_method("get") and boundary_detector_node.has("LoadedCels"):
+		boundary_detector_node.LoadedCels.clear()
+		boundary_detector_node.current_cell = Vector2i.ZERO
+		print("🔄 Reset boundary detector")
+	
+	# Force boundary check to load new area around the new start location
+	if boundary_detector_node.has_method("force_boundary_check"):
+		print("🌐 Fetching data for new area...")
+		await boundary_detector_node.force_boundary_check()
+	
+	print("✅ Data cleared and refetched for new location")
