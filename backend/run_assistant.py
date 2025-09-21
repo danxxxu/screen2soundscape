@@ -313,7 +313,29 @@ def run_osm(
         model_path = find_best_piper_model(MODEL_DIR, language, speaker)
         return speak(msg, language=language, speaker_key=model_path, speed=speed, output_mode=output_mode)
 
+    # After you fetch results in run_osm()
     elements = results.get("elements", [])
+    
+    if not elements:
+        # widen radius
+        params["radius"] = max(params.get("radius", 500), 1500)
+        overpass_query = build_overpass_query(params)
+        results = run_overpass_query(overpass_query)
+        elements = results.get("elements", [])
+    
+    if not elements and P.get("tag_key") == "shop":
+        # temporarily broaden to supermarket|convenience
+        lat, lon = params["center"]
+        radius = params.get("radius", 1500)
+        out_limit = params.get("out_limit", 300)
+        overpass_query = (
+            f'[out:json][timeout:25];'
+            f'(nwr(around:{radius},{lat},{lon})["shop"~"^(supermarket|convenience)$"];);'
+            f'out tags center qt {out_limit};'
+        )
+        results = run_overpass_query(overpass_query)
+        elements = results.get("elements", [])
+
     print(f"✅ Overpass returned {len(elements)} element(s).")
 
     # ---- Compute nearest K (fast heap), requires 'center' coords and 'out ... center' ----
