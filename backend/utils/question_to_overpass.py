@@ -70,6 +70,13 @@ def geocode_point_cached(loc: str) -> Tuple[float, float]:
     _save_geocode_cache()
     return coords
 
+def _split_tag_values(v: str) -> list[str]:
+    """Split accidental multi-values like 'herbalist;supermarket' into clean tokens."""
+    if not isinstance(v, str):
+        return []
+    parts = re.split(r"[;,\s]+", v.strip())
+    return [p for p in parts if p]
+
 # ========= Language utils =========
 def detect_and_translate(q: str) -> str:
     """
@@ -310,23 +317,24 @@ def build_overpass_query(P):
     """
     # ---- filters ----
     selector_parts = []
+    
+    # NEW: split accidental multi-values (e.g., 'herbalist;supermarket')
     if P.get("tag_key") and P.get("tag_value"):
-        selector_parts.append(f'"{P["tag_key"]}"="{P["tag_value"]}"')
-    if P.get("wheelchair_only"):
-        selector_parts.append('"wheelchair"="yes"')
-    if P.get("pet_friendly"):
-        selector_parts.append('"pets"="yes"')
-    if P.get("opening_hours_regex"):
-        oh = str(P["opening_hours_regex"]).replace('"', r'\"')
-        selector_parts.append(f'"opening_hours"~"{oh}"')
+        key = P["tag_key"]
+        vals = _split_tag_values(P["tag_value"])
+    
+        # Prefer exact supermarket for this very common case; drop unrelated noise like 'herbalist'
+        if key == "shop" and "supermarket" in vals:
+            vals = ["supermarket"]
+    
+        if len(vals) == 0:
+            selector_parts.append(f'"{key}"')  # key exists
+        elif len(vals) == 1:
+            selector_parts.append(f'"{key}"="{vals[0]}"')
+        else:
+            pat = "^(" + "|".join(map(re.escape, vals)) + ")$"
+            selector_parts.append(f'"{key}"~"{pat}"')
 
-    selector = " and ".join(selector_parts)
-    selector_brackets = f"[{selector}]" if selector else ""
-
-    # ---- knobs ----
-    radius = int(P.get("radius", 1000) or 1000)
-    radius = max(50, min(radius, 5000))
-    out_limit = int(P.get("out_limit", 300))  # ✅ cap results from Overpass
 
     # ---- area branch (only if we have a selector) ----
     place_name = P.get("place_name")
