@@ -1,9 +1,10 @@
-@tool
+#@tool
 extends Node3D
 
 const PlaceData = preload("res://src/models/Place.gd")
 const MapUtils = preload("res://src/map_utils.gd")
 
+var PlacesDictByLocation = {}
 var place_data_models: Array[PlaceData] = []
 
 func _ready():
@@ -79,13 +80,16 @@ func load_places_from_overpass(lat1: float, lon1: float, lat2: float, lon2: floa
 
 				# Convert coordinates
 				var local_coords = MapUtils.convert_to_local_coords(element["lat"], element["lon"])
-
+			
 				# Adjust position to be on building perimeter if needed
 				var adjusted_coords = adjust_place_position(Vector2(local_coords.x, local_coords.y))
 				place.x = adjusted_coords.x
 				place.z = -adjusted_coords.y
-
-				place_data_models.append(place)
+				
+				var key = str(int(place.x)) + ' ' + str(int(place.z))
+				if not key in PlacesDictByLocation:
+					place_data_models.append(place)
+					PlacesDictByLocation[key] = true
 
 func adjust_place_position(place_pos: Vector2) -> Vector2:
 	var buildings_node = get_parent().get_node("Buildings")

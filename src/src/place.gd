@@ -1,4 +1,4 @@
-@tool
+#@tool
 extends Node3D
 class_name Place
 const PlaceData = preload("res://src/models/Place.gd")
@@ -20,7 +20,7 @@ func _ready():
 	audio_player = $name_audio
 	ambient_player = $ambient_audio
 	area = $Area3D
-	label = $MeshInstance3D/Label3D
+	label = $Label3D
 
 	# Connect area signals to our own signal handlers - no more direct parent calls!
 	area.body_entered.connect(_on_area_3d_body_entered)

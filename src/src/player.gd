@@ -140,7 +140,6 @@ func _ready():
 	var rotate_sound = load("res://assets/audio/rotate.wav")
 	if rotate_sound:
 		rotate_audio.stream = rotate_sound
-		rotate_audio.volume_db = -10  # Adjust volume as needed
 	else:
 		push_error("Could not load rotate.wav sound file")
 		

@@ -1,9 +1,9 @@
 [gd_scene load_steps=7 format=3 uid="uid://banloe8guvh8w"]
 
 [ext_resource type="Script" uid="uid://c0uxdm8rq568n" path="res://src/player.gd" id="1_q2squ"]
-[ext_resource type="AudioStream" uid="uid://d0udllpvfkq8" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
-[ext_resource type="AudioStream" uid="uid://d0rjlac6ec7jp" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
-[ext_resource type="AudioStream" uid="uid://byk1cci02j6ir" path="res://assets/audio/sliding.mp3" id="5_wall"]
+[ext_resource type="AudioStream" uid="uid://dv6h2l5viohyd" path="res://assets/audio/100bpmsmoothvibe.wav" id="2_vqdj0"]
+[ext_resource type="AudioStream" uid="uid://dh2bdsynqefos" path="res://assets/audio/footsteps/footstep_grass.wav" id="3_thov6"]
+[ext_resource type="AudioStream" uid="uid://b8djjj5qw78c5" path="res://assets/audio/sliding.mp3" id="5_wall"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_cpk1c"]
 
@@ -34,7 +34,6 @@ bus = &"STS"
 
 [node name="footstep" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("3_thov6")
-volume_db = -18.024
 bus = &"STS"
 
 [node name="Timer" type="Timer" parent="."]
@@ -50,13 +49,11 @@ area_mask = 2049
 
 [node name="wall_audio" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("5_wall")
-volume_db = -10.0
 bus = &"STS"
 
 [node name="rotate_audio" type="AudioStreamPlayer3D" parent="."]
-volume_db = -10.0
+volume_db = -30.0
 bus = &"STS"
 
 [node name="houses_audio" type="AudioStreamPlayer3D" parent="."]
-volume_db = -10.0
 bus = &"STS"

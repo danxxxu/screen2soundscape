@@ -56,6 +56,9 @@ func execute_command(cmd: String):
 		await _handle_goto_command(location)
 		return
 	
+	if cmd.begins_with("restart") or cmd.begins_with("reset"):
+		reset_player()
+		return
 	match cmd.to_lower():
 		"address":
 			if current_place and current_place.place_data:
@@ -191,9 +194,6 @@ func _process_nominatim_result(result: Dictionary, location: String):
 	var lon = float(nom_result["lon"])
 	var display_name = nom_result["display_name"]
 	
-	print("📍 Found location: ", display_name)
-	print("📍 Coordinates: ", lat, ", ", lon)
-	
 	# Update the start location in MapUtils
 	MapUtils.start = Vector2(lat, lon)
 	print("🔄 Updated start location to: ", MapUtils.start)
@@ -201,13 +201,14 @@ func _process_nominatim_result(result: Dictionary, location: String):
 	# Clear existing data and refetch for new area using boundary detector
 	await _clear_and_refetch_data()
 	
-	# Move player to new location (center of map)
-	if player:
-		player.global_position = Vector3(0, player.global_position.y, 0)
-		print("🚶 Moved player to center of new area")
-	
+	reset_player()
 	command_label.text = "> Moved to: " + display_name
 
+func reset_player():
+	if player:
+		player.global_position = Vector3(0, player.global_position.y, 0)
+
+		
 # Clear existing data and refetch for new area using boundary detector
 func _clear_and_refetch_data():
 	print("🧹 Clearing existing data...")
