@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://cwrxsfnvowad6"]
+[gd_scene load_steps=23 format=3 uid="uid://cwrxsfnvowad6"]
 
 [ext_resource type="Script" uid="uid://dknww18ld512j" path="res://src/buildings.gd" id="1_buildings"]
 [ext_resource type="AudioStream" uid="uid://b7qtkoenhw6db" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
@@ -10,6 +10,7 @@
 [ext_resource type="AudioStream" uid="uid://bd8ljp4lxohf1" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://bm77jweqfq3jn" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
 [ext_resource type="Script" uid="uid://cw2xtqwodkskw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
+[ext_resource type="Script" uid="uid://xwf5ty2sr8tr" path="res://occlusion.gd" id="11_dqloj"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -151,3 +152,6 @@ script = ExtResource("9_3ingr")
 script = ExtResource("1_tpwpp")
 
 [node name="Polygons" type="Node3D" parent="."]
+
+[node name="occlusion" type="Node3D" parent="."]
+script = ExtResource("11_dqloj")

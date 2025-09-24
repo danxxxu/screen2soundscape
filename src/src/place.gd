@@ -62,6 +62,8 @@ func _setup_place_data():
 		var sound = load(sound_path)
 		if sound:
 			ambient_player.stream = sound
+			ambient_player.stream.loop = true
+			ambient_player.add_to_group("occludable_audio")
 			ambient_player.play()
 		else:
 			print("⚠️ Could not load ambient sound for type:", type, " using unknown.mp3")
@@ -87,7 +89,8 @@ func _on_area_3d_body_entered(body):
 		var announcement = ''
 		if place_data.type != "unknown":
 			announcement += place_data.type + " "
-		announcement += place_data.name
+		if place_data.name != 'Unnamed Place':
+			announcement += place_data.name
 		Speaker.speak(announcement)
 		if audio_player.stream:
 			audio_player.play()

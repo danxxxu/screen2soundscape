@@ -320,6 +320,7 @@ func create_buildings():
 			
 			# Add the building to the buildings group
 			collision_body.add_to_group("buildings")
+			collision_body.add_to_group("occludable_audio")
 
 			# Add proximity detection using the extracted method
 			add_building_proximity(building_points, building)
