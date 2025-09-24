@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3 uid="uid://cwrxsfnvowad6"]
+[gd_scene load_steps=22 format=3 uid="uid://cwrxsfnvowad6"]
 
 [ext_resource type="Script" uid="uid://dknww18ld512j" path="res://src/buildings.gd" id="1_buildings"]
 [ext_resource type="AudioStream" uid="uid://b7qtkoenhw6db" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
@@ -45,6 +45,10 @@ uv2_scale = Vector3(60, 60, 60)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_a6j3j"]
 size = Vector3(1000, 1, 1000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7ftgl"]
+transparency = 1
+cull_mode = 1
 
 [sub_resource type="BoxMesh" id="BoxMesh_jkbgw"]
 
@@ -98,9 +102,9 @@ surface_material_override/0 = SubResource("StandardMaterial3D_i7ydk")
 shape = SubResource("BoxShape3D_a6j3j")
 
 [node name="HeightPlane" type="MeshInstance3D" parent="."]
-transform = Transform3D(-1, 8.74228e-08, 0, -8.74228e-08, -1, 0, 0, 0, 1, 16.337, 10, 0)
+transform = Transform3D(-1, -8.74228e-08, 0, 8.74228e-08, -1, 0, 0, 0, 1, 16.337, 10, 0)
 mesh = SubResource("PlaneMesh_xluca")
-surface_material_override/0 = SubResource("StandardMaterial3D_i7ydk")
+surface_material_override/0 = SubResource("StandardMaterial3D_7ftgl")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="HeightPlane"]
 
