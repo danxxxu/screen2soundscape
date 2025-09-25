@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bvduo4og7f3pl"
+path="res://.godot/imported/building 6.mp3-b28e02d68ac58db4cbbf14aa087a83de.mp3str"
+
+[deps]
+
+source_file="res://assets/audio/buildings/building 6.mp3"
+dest_files=["res://.godot/imported/building 6.mp3-b28e02d68ac58db4cbbf14aa087a83de.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

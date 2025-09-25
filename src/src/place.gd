@@ -55,17 +55,36 @@ func _setup_place_data():
 	# Assign sound
 	if place_data.sound:
 		audio_player.stream = place_data.sound
-
+		
 	if place_data.type and place_data.category:
 		var type = place_data.category + "_"+ place_data.type
 		var sound_path = "res://assets/audio/places/" + type + ".mp3"
 		var sound = load(sound_path)
+		if not sound:
+			sound = load("res://assets/audio/places/" + place_data.category + ".mp3")
+			
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		
 		if sound:
 			ambient_player.stream = sound
 			ambient_player.stream.loop = true
 			ambient_player.add_to_group("occludable_audio")
 			ambient_player.play()
-		else:
+			
+			var start_offset := 0.0
+			var dur := 0.0
+			if sound is AudioStreamWAV:
+				dur = (sound as AudioStreamWAV).get_length()
+			elif sound is AudioStreamOggVorbis:
+				dur = (sound as AudioStreamOggVorbis).get_length()
+			elif sound is AudioStreamMP3:
+				dur = (sound as AudioStreamMP3).get_length()
+			if dur > 0.1:
+				start_offset = rng.randf() * dur
+
+			ambient_player.call_deferred("play", start_offset)
+		else:			
 			print("⚠️ Could not load ambient sound for type:", type, " using unknown.mp3")
 
 
@@ -75,7 +94,8 @@ func _setup_place_data():
 		label.position.y = 2.0  # Position above the mesh
 		# Add type if it's not "unknown"
 		if place_data.type != "unknown":
-			label.text += "\n(" + place_data.type + ")"
+			label.text += "\n(type: " + place_data.type + ")"
+			label.text += "\n(category: " + place_data.category + ")"
 		# Add address if available
 		if place_data.tags and place_data.tags.has("addr:street"):
 			var address = place_data.tags["addr:street"]
@@ -92,14 +112,10 @@ func _on_area_3d_body_entered(body):
 		if place_data.name != 'Unnamed Place':
 			announcement += place_data.name
 		Speaker.speak(announcement)
-		if audio_player.stream:
-			audio_player.play()
 		emit_signal("player_entered", self)
 
 
 func _on_area_3d_body_exited(body):
 	if body.name == "Player":
-		Speaker.stop_speaking()
-		if audio_player.playing:
-			audio_player.stop()
+		#Speaker.stop_speaking()
 		emit_signal("player_exited", self)

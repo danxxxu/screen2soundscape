@@ -5,7 +5,33 @@ const EXTRUDE_HEIGHT = 10.0  # Height of the extruded path
 var building_data = {}
 var node_data = {} 
 var building_material: StandardMaterial3D
+var emitter_dict := {}  # Dictionary[Vector3i, Array[AudioStreamPlayer3D]]
+var CELL_SIZE := 15.0    # same as your check radius
 
+func _has_nearby_emitter(pos: Vector3, stream: AudioStream, radius: float = 5.0) -> bool:
+	var cell := _cell_key(pos)
+	var r := int(ceil(radius / CELL_SIZE))
+
+	for x in range(cell.x - r, cell.x + r + 1):
+		for y in range(cell.y - r, cell.y + r + 1):
+			for z in range(cell.z - r, cell.z + r + 1):
+				var key := Vector3i(x, y, z)
+				if not emitter_dict.has(key):
+					continue
+				for node in emitter_dict[key]:
+					if node and node.stream:
+						var same = node.stream == stream \
+							or (stream.resource_path != "" and node.stream.resource_path == stream.resource_path)
+						if same and node.global_position.distance_to(pos) <= radius:
+							return true
+	return false
+	
+func _cell_key(pos: Vector3) -> Vector3i:
+	return Vector3i(
+		int(floor(pos.x / CELL_SIZE)),
+		int(floor(pos.y / CELL_SIZE)),
+		int(floor(pos.z / CELL_SIZE))
+	)
 func _ready():
 	if Engine.is_editor_hint():
 		# Clear existing children when in editor
@@ -300,12 +326,11 @@ func create_buildings():
 			# Create the extruded building
 			var building = create_extruded_polygon(building_points, EXTRUDE_HEIGHT)
 			building.material_override = building_material
-			
-			var loop = preload("res://assets/audio/houses.mp3")
-
-			# Emitters every 5 m, at mid-wall height, pushed 25 cm OUTSIDE the polygon
-		
-
+					
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			var numb = rng.randi_range(1,7)
+			var loop = load("res://assets/audio/buildings/building " + str(numb) + ".mp3")
 
 			# Add collision shape for physics
 			var collision_body = StaticBody3D.new()
@@ -344,7 +369,7 @@ func add_wall_sound_emitters(
 	points: Array,                      # Array[Vector2] in local XZ (y -> Z)
 	height: float,
 	stream: AudioStream,
-	spacing: float = 5.0,               # meters between emitters
+	spacing: float = 10.0,               # meters between emitters
 	emitter_height: float = 0.5,        # from the base; try height*0.5 for mid-wall
 	outward_offset: float = 0.25,       # push emitters slightly outside
 	volume_db: float = -8.0,
@@ -384,43 +409,45 @@ func add_wall_sound_emitters(
 		for s in range(steps + 1):
 			var dist = min(float(s) * spacing, seg_len)
 			var p2 = a2 + dir * dist + outward * outward_offset
-
-			# Your mesh maps (x, poly.y) -> (x, z = -poly.y)
 			var pos3 := Vector3(p2.x, clamp(emitter_height, 0.0, height), -p2.y)
+			var key := _cell_key(parent_node.to_global(pos3))
+			if not emitter_dict.has(key):
+				emitter_dict[key] = []
+				var sphere := MeshInstance3D.new()
+				var sm := SphereMesh.new()
+				sm.radius = 0.2
+				sm.height = 0.2
+				sphere.mesh = sm
+				# Make it blue
+				var mat := StandardMaterial3D.new()
+				mat.albedo_color = Color(0.2, 0.5, 1.0)  # light blue
+				sphere.material_override = mat
+				sphere.transform = Transform3D(Basis(), pos3)
+				parent_node.add_child(sphere)
+				var player := AudioStreamPlayer3D.new()
+				
+				player.stream = stream
+				player.stream.loop = true
+				player.volume_db = volume_db
+				player.max_distance = max_distance
+				player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+				player.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_DISABLED
+				player.transform = Transform3D(Basis(), pos3)
+				parent_node.add_child(player)
 
-			var sphere := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 0.2
-			sm.height = 0.2
-			sphere.mesh = sm
-			# Make it blue
-			var mat := StandardMaterial3D.new()
-			mat.albedo_color = Color(0.2, 0.5, 1.0)  # light blue
-			sphere.material_override = mat
-			sphere.transform = Transform3D(Basis(), pos3)
-			parent_node.add_child(sphere)
+				# Choose start offset (if any)
+				var start_offset := 0.0
+				if randomize_start:
+					var dur := 0.0
+					if stream is AudioStreamWAV:
+						dur = (stream as AudioStreamWAV).get_length()
+					elif stream is AudioStreamOggVorbis:
+						dur = (stream as AudioStreamOggVorbis).get_length()
+					elif stream is AudioStreamMP3:
+						dur = (stream as AudioStreamMP3).get_length()
+					if dur > 0.1:
+						start_offset = rng.randf() * dur
 
-			# Optional: de-phase loops
-			var player := AudioStreamPlayer3D.new()
-			player.stream = stream
-			player.volume_db = volume_db
-			player.max_distance = max_distance
-			player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-			player.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_DISABLED
-			player.transform = Transform3D(Basis(), pos3)
-			parent_node.add_child(player)
-
-			# Choose start offset (if any)
-			var start_offset := 0.0
-			if randomize_start:
-				var dur := 0.0
-				if stream is AudioStreamWAV:
-					dur = (stream as AudioStreamWAV).get_length()
-				elif stream is AudioStreamOggVorbis:
-					dur = (stream as AudioStreamOggVorbis).get_length()
-				elif stream is AudioStreamMP3:
-					dur = (stream as AudioStreamMP3).get_length()
-				if dur > 0.1:
-					start_offset = rng.randf() * dur
-
-			player.call_deferred("play", start_offset)
+				player.call_deferred("play", start_offset)
+				emitter_dict[key].append(player)
+			

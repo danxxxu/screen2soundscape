@@ -84,15 +84,27 @@ func _input(event):
 	if event is InputEventKey:
 		if event.pressed:
 			if event.keycode == KEY_ENTER:
-				if command_mode:
-					# Execute command
-					await execute_command(current_command)
-					current_command = ""
-					command_mode = false
+				# Check if Shift is pressed for goto command mode
+				if event.shift_pressed:
+					# Shift+Enter: Enter goto command mode
+					if command_mode:
+						current_command = "goto " + current_command
+						await execute_command(current_command)	
+						current_command = ""
+						command_mode = false	
+						update_command_label()			
+											
 				else:
-					# Enter command mode
-					command_mode = true
-				update_command_label()
+					# Regular Enter: Toggle command mode or execute command
+					if command_mode:
+						# Execute command
+						await execute_command(current_command)
+						current_command = ""
+						command_mode = false
+					else:
+						# Enter command mode
+						command_mode = true
+					update_command_label()
 			elif command_mode:
 				if event.keycode == KEY_BACKSPACE:
 					current_command = current_command.substr(0, max(0, current_command.length() - 1))
@@ -130,7 +142,7 @@ func _handle_goto_command(location: String):
 	# Use await approach - much simpler!
 	var result = await _make_http_request(url)
 	
-	if result == null:
+	if result == null || result == {}:
 		print("❌ Request failed or timed out")
 		command_label.text = "> Error: Failed to search for location"
 		return

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://drhoitesjo1c5"
+path="res://.godot/imported/building 4.mp3-f74884080e4d4a58aab39ae54bf6e446.mp3str"
+
+[deps]
+
+source_file="res://assets/audio/buildings/building 4.mp3"
+dest_files=["res://.godot/imported/building 4.mp3-f74884080e4d4a58aab39ae54bf6e446.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

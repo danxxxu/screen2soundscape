@@ -11,7 +11,9 @@ const GRID_STEP = 5.0
 
 
 #static var start = Vector2(52.372099, 4.892923)
-static var start = Vector2(52.078247, 4.291105)
+#static var start = Vector2(52.078247, 4.291105)
+static var start = Vector2(52.158919, 4.489398) # leiden
+
 
 # Scale factor to convert degrees to local units
 const SCALE_FACTOR = 200

@@ -3,6 +3,10 @@ extends Node
 class_name OverpassAPI
 #const overpass_url = 'http://142.93.234.209/api/interpreter'
 const overpass_url = 'https://overpass-api.de/api/interpreter'
+
+# Retry configuration
+const MAX_RETRIES = 5
+const BASE_DELAY = 1.0  # Base delay in seconds
 const TAGS = [
 	['access', 'university'],
 	['aeroway', 'helipad'],
@@ -87,8 +91,70 @@ const TAGS = [
 	['tourism', 'attraction'],
 	['tourism', 'hotel'],
 	['type', 'street'],
+	['amenity', '*'],
+	['shop', '*'],
+	['tourism', '*'],
 	['waterway', 'stream']
 ]
+
+func _make_overpass_request(query: String, query_name: String) -> Dictionary:
+	"""
+	Generic function to make Overpass API requests with retry logic
+	Returns: Dictionary with response data or empty dict on failure
+	"""
+	for attempt in range(MAX_RETRIES):
+		print("🔄 %s attempt %d/%d..." % [query_name, attempt + 1, MAX_RETRIES])
+		
+		# Create HTTP request
+		var http_request = HTTPRequest.new()
+		add_child(http_request)
+		
+		# Make the request to Overpass API
+		var overpass_url = "https://overpass-api.de/api/interpreter"
+		var headers = ["Content-Type: application/x-www-form-urlencoded"]
+		
+		var error = http_request.request(overpass_url, headers, HTTPClient.METHOD_POST, "data=" + query.uri_encode())
+		
+		if error != OK:
+			print("❌ Error making HTTP request (attempt %d): %d" % [attempt + 1, error])
+			http_request.queue_free()
+			if attempt < MAX_RETRIES - 1:
+				var delay = BASE_DELAY * pow(2, attempt)  # Exponential backoff
+				print("⏳ Waiting %.1f seconds before retry..." % delay)
+				await get_tree().create_timer(delay).timeout
+			continue
+		
+		# Wait for response
+		var result = await http_request.request_completed
+		http_request.queue_free()
+		
+		var response_code = result[1]
+		var body = result[3]
+		
+		print("📥 %s response received (attempt %d). Code: %d" % [query_name, attempt + 1, response_code])
+		
+		if response_code == 200:
+			var json_string = body.get_string_from_utf8()
+			var json = JSON.new()
+			var parse_error = json.parse(json_string)
+			
+			if parse_error == OK:
+				var data = json.get_data()
+				print("✅ %s successful on attempt %d" % [query_name, attempt + 1])
+				return data
+			else:
+				print("❌ JSON Parse Error (attempt %d): %s" % [attempt + 1, json.get_error_message()])
+		else:
+			print("❌ HTTP Error (attempt %d): %d" % [attempt + 1, response_code])
+		
+		# If not the last attempt, wait before retrying
+		if attempt < MAX_RETRIES - 1:
+			var delay = BASE_DELAY * pow(2, attempt)  # Exponential backoff
+			print("⏳ Waiting %.1f seconds before retry..." % delay)
+			await get_tree().create_timer(delay).timeout
+	
+	print("❌ %s failed after %d attempts" % [query_name, MAX_RETRIES])
+	return {}
 
 func query_buildings(lat1: float, lon1: float, lat2: float, lon2: float) -> Dictionary:
 	"""
@@ -112,61 +178,29 @@ func query_buildings(lat1: float, lon1: float, lat2: float, lon2: float) -> Dict
 		min_lat, min_lon, max_lat, max_lon
 	]
 	
-	# Create HTTP request
-	var http_request = HTTPRequest.new()
-	add_child(http_request)
+	# Use retry logic to make the request
+	var building_data = await _make_overpass_request(query, "Buildings query")
 	
-	# Make the request to Overpass API
-	var overpass_url = "https://overpass-api.de/api/interpreter"
-	var headers = ["Content-Type: application/x-www-form-urlencoded"]
-	
-	print("🚀 Sending query to Overpass API...")
-	var error = http_request.request(overpass_url, headers, HTTPClient.METHOD_POST, "data=" + query.uri_encode())
-	
-	if error != OK:
-		print("❌ Error making HTTP request: ", error)
-		http_request.queue_free()
+	if building_data.is_empty():
 		return {"building_data": {}, "node_data": {}}
 	
-	# Wait for response
-	var result = await http_request.request_completed
-	http_request.queue_free()
+	var node_data = {}
 	
-	var response_code = result[1]
-	var body = result[3]
-	
-	print("📥 Overpass API response received. Code: ", response_code)
-	
-	if response_code == 200:
-		var json_string = body.get_string_from_utf8()
-		var json = JSON.new()
-		var parse_error = json.parse(json_string)
+	# Process the data and extract node coordinates
+	if building_data.has("elements"):
+		# First, collect all node coordinates
+		for element in building_data.elements:
+			if element.type == "node":
+				node_data[element.id] = {
+					"lat": element.lat,
+					"lon": element.lon
+				}
+		print('✅ Loaded ', building_data.elements.size(), ' building elements from Overpass API')
+		print('📍 Extracted ', node_data.size(), ' node coordinates')
 		
-		if parse_error == OK:
-			var building_data = json.get_data()
-			var node_data = {}
-			
-			# Process the data and extract node coordinates
-			if building_data.has("elements"):
-				# First, collect all node coordinates
-				for element in building_data.elements:
-					if element.type == "node":
-						node_data[element.id] = {
-							"lat": element.lat,
-							"lon": element.lon
-						}
-				print('✅ Loaded ', building_data.elements.size(), ' building elements from Overpass API')
-				print('📍 Extracted ', node_data.size(), ' node coordinates')
-				
-				return {"building_data": building_data, "node_data": node_data}
-			else:
-				print("❌ No elements found in Overpass response")
-				return {"building_data": {}, "node_data": {}}
-		else:
-			print("❌ JSON Parse Error: ", json.get_error_message())
-			return {"building_data": {}, "node_data": {}}
+		return {"building_data": building_data, "node_data": node_data}
 	else:
-		print("❌ HTTP Error: ", response_code)
+		print("❌ No elements found in Overpass response")
 		return {"building_data": {}, "node_data": {}} 
 
 func query_places(lat1: float, lon1: float, lat2: float, lon2: float) -> Dictionary:
@@ -190,57 +224,27 @@ func query_places(lat1: float, lon1: float, lat2: float, lon2: float) -> Diction
 	# Build the query body dynamically
 	var bodytext = ""
 	for tag in TAGS:
-		bodytext += '  node["%s"="%s"]%s;\n' % [tag[0], tag[1], bbox]
+		if tag[1] == "*":
+			bodytext += '  node["%s"]%s;\n' % [tag[0], bbox]
+		else:
+			bodytext += '  node["%s"="%s"]%s;\n' % [tag[0], tag[1], bbox]
 
 	# Final Overpass query
 	var query = """[out:json][timeout:1800];
 	(%s);
 	out center 10000;""" % bodytext
 
-	# Create HTTP request
-	var http_request = HTTPRequest.new()
-	add_child(http_request)
+	# Use retry logic to make the request
+	var places_data = await _make_overpass_request(query, "Places query")
 	
-	# Make the request to Overpass API
-	var overpass_url = "https://overpass-api.de/api/interpreter"
-	var headers = ["Content-Type: application/x-www-form-urlencoded"]
-	
-	print("🚀 Sending places query to Overpass API...")
-	var error = http_request.request(overpass_url, headers, HTTPClient.METHOD_POST, "data=" + query.uri_encode())
-	
-	if error != OK:
-		print("❌ Error making HTTP request: ", error)
-		http_request.queue_free()
+	if places_data.is_empty():
 		return {"places_data": {}}
 	
-	# Wait for response
-	var result = await http_request.request_completed
-	http_request.queue_free()
-	
-	var response_code = result[1]
-	var body = result[3]
-	
-	print("📥 Overpass API places response received. Code: ", response_code)
-	
-	if response_code == 200:
-		var json_string = body.get_string_from_utf8()
-		var json = JSON.new()
-		var parse_error = json.parse(json_string)
-		
-		if parse_error == OK:
-			var places_data = json.get_data()
-			
-			if places_data.has("elements"):
-				print('✅ Loaded ', places_data.elements.size(), ' place elements from Overpass API')
-				return {"places_data": places_data}
-			else:
-				print("❌ No place elements found in Overpass response")
-				return {"places_data": {}}
-		else:
-			print("❌ JSON Parse Error: ", json.get_error_message())
-			return {"places_data": {}}
+	if places_data.has("elements"):
+		print('✅ Loaded ', places_data.elements.size(), ' place elements from Overpass API')
+		return {"places_data": places_data}
 	else:
-		print("❌ HTTP Error: ", response_code)
+		print("❌ No place elements found in Overpass response")
 		return {"places_data": {}} 
 
 # Function to query landuse polygons for 'grass' and 'meadow'
@@ -286,59 +290,27 @@ func query_landuse_polygons(lat1: float, lon1: float, lat2: float, lon2: float) 
 	# full query
 	var query = "[out:json][timeout:25];\n(\n" + body_text + ");\nout body;\n>;\nout skel qt;\n"
 
-	# Create HTTP request
-	var http_request = HTTPRequest.new()
-	add_child(http_request)
+	# Use retry logic to make the request
+	var polygon_data = await _make_overpass_request(query, "Landuse polygons query")
 	
-	# Make the request to Overpass API
-	var overpass_url = "https://overpass-api.de/api/interpreter"
-	var headers = ["Content-Type: application/x-www-form-urlencoded"]
-	
-	print("🚀 Sending landuse query to Overpass API...")
-	var error = http_request.request(overpass_url, headers, HTTPClient.METHOD_POST, "data=" + query.uri_encode())
-	
-	if error != OK:
-		print("❌ Error making HTTP request: ", error)
-		http_request.queue_free()
+	if polygon_data.is_empty():
 		return {"polygon_data": {}, "node_data": {}}
 	
-	# Wait for response
-	var result = await http_request.request_completed
-	http_request.queue_free()
+	var node_data = {}
 	
-	var response_code = result[1]
-	var body = result[3]
-	
-	print("📥 Overpass API landuse response received. Code: ", response_code)
-	
-	if response_code == 200:
-		var json_string = body.get_string_from_utf8()
-		var json = JSON.new()
-		var parse_error = json.parse(json_string)
+	# Process the data and extract node coordinates
+	if polygon_data.has("elements"):
+		# First, collect all node coordinates
+		for element in polygon_data.elements:
+			if element.type == "node":
+				node_data[element.id] = {
+					"lat": element.lat,
+					"lon": element.lon
+				}
+		print('✅ Loaded ', polygon_data.elements.size(), ' landuse elements from Overpass API')
+		print('📍 Extracted ', node_data.size(), ' node coordinates')
 		
-		if parse_error == OK:
-			var polygon_data = json.get_data()
-			var node_data = {}
-			
-			# Process the data and extract node coordinates
-			if polygon_data.has("elements"):
-				# First, collect all node coordinates
-				for element in polygon_data.elements:
-					if element.type == "node":
-						node_data[element.id] = {
-							"lat": element.lat,
-							"lon": element.lon
-						}
-				print('✅ Loaded ', polygon_data.elements.size(), ' landuse elements from Overpass API')
-				print('📍 Extracted ', node_data.size(), ' node coordinates')
-				
-				return {"polygon_data": polygon_data, "node_data": node_data}
-			else:
-				print("❌ No landuse elements found in Overpass response")
-				return {"polygon_data": {}, "node_data": {}}
-		else:
-			print("❌ JSON Parse Error: ", json.get_error_message())
-			return {"polygon_data": {}, "node_data": {}}
+		return {"polygon_data": polygon_data, "node_data": node_data}
 	else:
-		print("❌ HTTP Error: ", response_code)
+		print("❌ No landuse elements found in Overpass response")
 		return {"polygon_data": {}, "node_data": {}} 
