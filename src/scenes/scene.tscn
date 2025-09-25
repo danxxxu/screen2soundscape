@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dknww18ld512j" path="res://src/buildings.gd" id="1_buildings"]
 [ext_resource type="AudioStream" uid="uid://b7qtkoenhw6db" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
-[ext_resource type="Script" uid="uid://qmilrc5e8c25" path="res://src/places.gd" id="1_places"]
+[ext_resource type="Script" uid="uid://cw0k55peivxxt" path="res://src/places.gd" id="1_places"]
 [ext_resource type="Script" uid="uid://dqbrpsrrjpmge" path="res://src/scene.gd" id="1_scene"]
 [ext_resource type="Script" uid="uid://di0pwpkvun8we" path="res://src/boundary_detector.gd" id="1_tpwpp"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://scenes/player.tscn" id="2_lveax"]
@@ -90,7 +90,6 @@ label_settings = SubResource("LabelSettings_7ftgl")
 stream = ExtResource("1_cy7eh")
 volume_db = -14.61
 autoplay = true
-bus = &"STS"
 
 [node name="Floor" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.268, -0.038, 0.118)
@@ -125,7 +124,6 @@ skeleton = NodePath("AudioStreamPlayer3D")
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("3_yxa1m")
 volume_db = -15.89
-bus = &"STS"
 
 [node name="RainTarget" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0213, 1.49, 8.5704)
@@ -137,7 +135,6 @@ skeleton = NodePath("AudioStreamPlayer3D2")
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("4_u6vwu")
 volume_db = -15.89
-bus = &"STS"
 
 [node name="Buildings" type="Node3D" parent="." groups=["buildings"]]
 script = ExtResource("1_buildings")

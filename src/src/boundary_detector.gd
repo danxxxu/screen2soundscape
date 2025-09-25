@@ -3,7 +3,7 @@ extends Node3D
 
 class_name BoundaryDetector
 
-var CELL_LENGTH = 150
+var CELL_LENGTH = 50
 var current_cell: Vector2i = Vector2i.ZERO
 
 var LoadedCels: Dictionary = {}
