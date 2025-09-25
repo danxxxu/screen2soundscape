@@ -62,3 +62,5 @@ backend/piper_models/
 src/.godot/
 
 *.tmp
+
+BitNet
