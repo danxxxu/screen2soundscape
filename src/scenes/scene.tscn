@@ -1,15 +1,15 @@
 [gd_scene load_steps=23 format=3 uid="uid://cwrxsfnvowad6"]
 
 [ext_resource type="Script" uid="uid://dknww18ld512j" path="res://src/buildings.gd" id="1_buildings"]
-[ext_resource type="AudioStream" uid="uid://b7qtkoenhw6db" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
-[ext_resource type="Script" uid="uid://cw0k55peivxxt" path="res://src/places.gd" id="1_places"]
+[ext_resource type="Script" uid="uid://qmilrc5e8c25" path="res://src/places.gd" id="1_places"]
 [ext_resource type="Script" uid="uid://dqbrpsrrjpmge" path="res://src/scene.gd" id="1_scene"]
 [ext_resource type="Script" uid="uid://di0pwpkvun8we" path="res://src/boundary_detector.gd" id="1_tpwpp"]
+[ext_resource type="AudioStream" uid="uid://v7wc2di6xk1i" path="res://assets/audio/breeze.mp3" id="2_dqloj"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://scenes/player.tscn" id="2_lveax"]
 [ext_resource type="Texture2D" uid="uid://bvci0n3rvsgtg" path="res://assets/images/rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
 [ext_resource type="AudioStream" uid="uid://bd8ljp4lxohf1" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://bm77jweqfq3jn" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
-[ext_resource type="Script" uid="uid://cw2xtqwodkskw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
+[ext_resource type="Script" uid="uid://brwups7vr8tqw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
 [ext_resource type="Script" uid="uid://xwf5ty2sr8tr" path="res://occlusion.gd" id="11_dqloj"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_d4ooh"]
@@ -76,8 +76,9 @@ mesh = SubResource("BoxMesh_u8caj")
 [node name="Label" type="Label" parent="HUD"]
 offset_left = 95.0
 offset_top = 78.0
-offset_right = 1050.0
-offset_bottom = 375.0
+offset_right = 1107.0
+offset_bottom = 393.0
+scale = Vector2(0.5, 0.5)
 text = "Screen to Soundscape Instructions: 
 Switch tutorial on/off - Press \"T\" 
 Skip a tutorial step - Press \"Tab\"
@@ -87,8 +88,8 @@ AI assistant - Press \"Enter\" and type in or record questions"
 label_settings = SubResource("LabelSettings_7ftgl")
 
 [node name="Background Sound" type="AudioStreamPlayer" parent="."]
-stream = ExtResource("1_cy7eh")
-volume_db = -14.61
+stream = ExtResource("2_dqloj")
+volume_db = 5.0
 autoplay = true
 
 [node name="Floor" type="MeshInstance3D" parent="."]

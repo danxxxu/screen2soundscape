@@ -32,12 +32,6 @@ func query_buildings_with_bounds(lat1: float, lon1: float, lat2: float, lon2: fl
 
 
 func query_buildings_from_overpass(lat1: float, lon1: float, lat2: float, lon2: float):
-	"""
-	Query buildings from Overpass API using the OverpassAPI class
-	"""
-	print("🌐 Querying buildings from Overpass API...")
-	
-	# Create OverpassAPI instance
 	var overpass_api = OverpassAPI.new()
 	add_child(overpass_api)
 	
@@ -310,18 +304,7 @@ func create_buildings():
 			var loop = preload("res://assets/audio/houses.mp3")
 
 			# Emitters every 5 m, at mid-wall height, pushed 25 cm OUTSIDE the polygon
-			add_wall_sound_emitters(
-				building,
-				building_points,
-				5,
-				loop,
-				25.0,
-				5 * 0.5,
-				0.25,
-				-8.0,
-				15.0,
-				true
-			)
+		
 
 
 			# Add collision shape for physics
@@ -343,6 +326,18 @@ func create_buildings():
 
 			# Add the building to the container
 			buildings_container.add_child(building) 
+			add_wall_sound_emitters(
+				building,
+				building_points,
+				5,
+				loop,
+				25.0,
+				5 * 0.5,
+				0.25,
+				-8.0,
+				15.0,
+				true
+			)
 
 func add_wall_sound_emitters(
 	parent_node: Node3D,
@@ -393,15 +388,6 @@ func add_wall_sound_emitters(
 			# Your mesh maps (x, poly.y) -> (x, z = -poly.y)
 			var pos3 := Vector3(p2.x, clamp(emitter_height, 0.0, height), -p2.y)
 
-			var player := AudioStreamPlayer3D.new()
-			player.stream = stream
-			player.volume_db = volume_db
-			player.max_distance = max_distance
-			player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-			player.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_DISABLED
-			player.transform = Transform3D(Basis(), pos3)
-			player.autoplay = true
-
 			var sphere := MeshInstance3D.new()
 			var sm := SphereMesh.new()
 			sm.radius = 0.2
@@ -415,6 +401,17 @@ func add_wall_sound_emitters(
 			parent_node.add_child(sphere)
 
 			# Optional: de-phase loops
+			var player := AudioStreamPlayer3D.new()
+			player.stream = stream
+			player.volume_db = volume_db
+			player.max_distance = max_distance
+			player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+			player.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_DISABLED
+			player.transform = Transform3D(Basis(), pos3)
+			parent_node.add_child(player)
+
+			# Choose start offset (if any)
+			var start_offset := 0.0
 			if randomize_start:
 				var dur := 0.0
 				if stream is AudioStreamWAV:
@@ -424,10 +421,6 @@ func add_wall_sound_emitters(
 				elif stream is AudioStreamMP3:
 					dur = (stream as AudioStreamMP3).get_length()
 				if dur > 0.1:
-					player.play(rng.randf() * dur)
-				else:
-					player.autoplay = true
-			else:
-				player.autoplay = true
+					start_offset = rng.randf() * dur
 
-			parent_node.add_child(player)
+			player.call_deferred("play", start_offset)

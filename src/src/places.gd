@@ -185,6 +185,7 @@ func create_place_instances():
 		place_instance.player_entered.connect(_on_place_entered)
 		place_instance.player_exited.connect(_on_place_exited)
 		add_child(place_instance)
+	place_data_models.clear()
 
 func _on_place_entered(place: Place):
 	var scene = get_parent()
