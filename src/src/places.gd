@@ -43,7 +43,7 @@ func query_places_with_bounds(lat1: float, lon1: float, lat2: float, lon2: float
 	"""
 	
 	await load_places_from_overpass(lat1, lon1, lat2, lon2)
-	create_place_instances()  # This will reconnect all signals properly
+	return create_place_instances()  # This will reconnect all signals properly
 
 func load_places_from_overpass(lat1: float, lon1: float, lat2: float, lon2: float):	
 	var overpass_api = OverpassAPI.new()
@@ -176,6 +176,7 @@ func find_nearest_point_on_perimeter(point: Vector2, building_points: Array) -> 
 
 func create_place_instances():
 	print("Creating ", place_data_models.size(), " place instances...")
+	var places = []
 	for place_data in place_data_models:
 		var scene = load("res://scenes/Place.tscn")
 		var place_instance = scene.instantiate()
@@ -185,7 +186,9 @@ func create_place_instances():
 		place_instance.player_entered.connect(_on_place_entered)
 		place_instance.player_exited.connect(_on_place_exited)
 		add_child(place_instance)
+		places.append( place_instance)
 	place_data_models.clear()
+	return places
 
 func _on_place_entered(place: Place):
 	var scene = get_parent()

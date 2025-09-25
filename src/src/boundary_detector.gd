@@ -33,8 +33,8 @@ func _ready():
 		for cell in prefetch_cells:
 			var bounds = _calculate_cell_bounds(cell)
 			var key: String = "%d,%d" % [cell.x, cell.y]
-			await _fetch_new_area_data(bounds)
-			LoadedCels[key] = true
+			var nodes = await _fetch_new_area_data(bounds)
+			LoadedCels[key] = nodes
 
 func _process(_delta):
 	if player and Engine.is_editor_hint():
@@ -120,16 +120,19 @@ func _clear_existing_data():
 
 func _fetch_new_area_data(bounds: Dictionary):
 	print("🌐 Fetching new area data for bounds: ", bounds)
+	var buildings = null
+	var places = null
+
 	if buildings_node and buildings_node.has_method("query_buildings_with_bounds"):
 		print("🏗️ Querying buildings...")
-		await buildings_node.query_buildings_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
+		buildings = await buildings_node.query_buildings_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
 	if places_node and places_node.has_method("query_places_with_bounds"):
 		print("🏪 Querying places...")
-		await places_node.query_places_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
+		places = await places_node.query_places_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
 	if polygons_node and polygons_node.has_method("query_polygons_with_bounds"):
 		print("🌿 Querying polygons...")
 		await polygons_node.query_polygons_with_bounds(bounds.lat1, bounds.lon1, bounds.lat2, bounds.lon2)
-
+	return [buildings, places]
 # Get the current grid cell
 func get_current_cell() -> Vector2i:
 	return current_cell

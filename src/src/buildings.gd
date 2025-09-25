@@ -54,7 +54,7 @@ func query_buildings_with_bounds(lat1: float, lon1: float, lat2: float, lon2: fl
 	
 	await query_buildings_from_overpass(lat1, lon1, lat2, lon2)
 	create_materials()
-	create_buildings()
+	return create_buildings()
 
 
 func query_buildings_from_overpass(lat1: float, lon1: float, lat2: float, lon2: float):
@@ -300,7 +300,7 @@ func create_buildings():
 	# Process each way that represents a building
 	var elements = building_data.elements
 	#var elements = [building_data.elements[0]]
-
+	
 	for element in elements:
 		if element.type == "way" and element.has("tags") and element.tags.has("building"):
 			# Get all nodes for this building in order
@@ -363,6 +363,7 @@ func create_buildings():
 				15.0,
 				true
 			)
+	return buildings_container
 
 func add_wall_sound_emitters(
 	parent_node: Node3D,
