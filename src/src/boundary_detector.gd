@@ -3,7 +3,7 @@ extends Node3D
 
 class_name BoundaryDetector
 
-var CELL_LENGTH = 200
+var CELL_LENGTH = 100
 var current_cell: Vector2i = Vector2i.ZERO
 
 var LoadedCels: Dictionary = {}
@@ -33,8 +33,8 @@ func _ready():
 		for cell in prefetch_cells:
 			var bounds = _calculate_cell_bounds(cell)
 			var key: String = "%d,%d" % [cell.x, cell.y]
-			var nodes = await _fetch_new_area_data(bounds)
-			LoadedCels[key] = nodes
+			var nodes_data = await _fetch_new_area_data(bounds)
+			LoadedCels[key] = nodes_data
 
 func _process(_delta):
 	if player and Engine.is_editor_hint():
@@ -65,13 +65,16 @@ func _check_boundary_crossing():
 		
 		print("🔲 Boundary crossed! Old cell: ", old_cell, " -> New cell: ", new_cell)
 		
+		# Clean up nodes from cells that are not direct neighbors
+		_cleanup_non_neighbor_cells(new_cell)
+		
 		# Calculate the lat/lon bounds for the new cell
 		var bounds = _calculate_cell_bounds(new_cell)
 		var key: String = "%d,%d" % [new_cell.x, new_cell.y]
 
 		if not key in LoadedCels:
-			await _fetch_new_area_data(bounds)
-			LoadedCels[key] = true
+			var nodes_data = await _fetch_new_area_data(bounds)
+			LoadedCels[key] = nodes_data
 
 func _update_current_cell():
 	if not player:
@@ -100,6 +103,52 @@ func _calculate_cell_bounds(cell: Vector2i) -> Dictionary:
 		"lat2": global_max.x,
 		"lon2": global_max.y
 	}
+
+
+func _cleanup_non_neighbor_cells(current_cell: Vector2i):	
+	var neighbors = [
+		Vector2i(current_cell.x - 1, current_cell.y - 1),  # Top-left
+		Vector2i(current_cell.x, current_cell.y - 1),      # Top
+		Vector2i(current_cell.x + 1, current_cell.y - 1),  # Top-right
+		Vector2i(current_cell.x - 1, current_cell.y),      # Left
+		Vector2i(current_cell.x, current_cell.y),          # Center (current cell)
+		Vector2i(current_cell.x + 1, current_cell.y),      # Right
+		Vector2i(current_cell.x - 1, current_cell.y + 1),  # Bottom-left
+		Vector2i(current_cell.x, current_cell.y + 1),      # Bottom
+		Vector2i(current_cell.x + 1, current_cell.y + 1)   # Bottom-right
+	]
+	
+	var cells_to_remove = []
+	for cell_key in LoadedCels.keys():
+		var cell = _parse_cell_key(cell_key)
+		
+		var is_neighbor = false
+		for neighbor in neighbors:
+			if cell == neighbor:
+				is_neighbor = true
+				break
+		
+		if not is_neighbor:
+			var nodes_data = LoadedCels[cell_key]
+			
+			if nodes_data and nodes_data is Array:
+				for node_list in nodes_data:
+					if node_list and node_list is Array:
+						for node in node_list:
+							if node and is_instance_valid(node):
+								node.queue_free()
+			
+			cells_to_remove.append(cell_key)
+	
+	for cell_key in cells_to_remove:
+		LoadedCels.erase(cell_key)
+	
+# Helper function to parse cell key back to Vector2i
+func _parse_cell_key(cell_key: String) -> Vector2i:
+	var parts = cell_key.split(",")
+	if parts.size() == 2:
+		return Vector2i(int(parts[0]), int(parts[1]))
+	return Vector2i.ZERO
 
 # Function to clear all existing places and buildings
 func _clear_existing_data():

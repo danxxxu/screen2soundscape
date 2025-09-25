@@ -363,7 +363,7 @@ func create_buildings():
 				15.0,
 				true
 			)
-	return buildings_container
+	return [buildings_container, buildings_container.get_children(true)]
 
 func add_wall_sound_emitters(
 	parent_node: Node3D,
