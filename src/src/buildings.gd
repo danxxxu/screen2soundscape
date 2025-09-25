@@ -173,8 +173,7 @@ func ensure_clockwise(points: Array) -> Array:
 	return result
 
 func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
-	#points = sort_points_clockwise(points)  # ← keep this in real use!
-	points = ensure_clockwise(points)   # <— ONE-LINE FIX
+	points = ensure_clockwise(points)  
 
 	if points.size() < 3:
 		push_error("Polygon must have at least 3 points.")
@@ -307,6 +306,23 @@ func create_buildings():
 			# Create the extruded building
 			var building = create_extruded_polygon(building_points, EXTRUDE_HEIGHT)
 			building.material_override = building_material
+			
+			var loop = preload("res://assets/audio/houses.mp3")
+
+			# Emitters every 5 m, at mid-wall height, pushed 25 cm OUTSIDE the polygon
+			add_wall_sound_emitters(
+				building,
+				building_points,
+				5,
+				loop,
+				25.0,
+				5 * 0.5,
+				0.25,
+				-8.0,
+				15.0,
+				true
+			)
+
 
 			# Add collision shape for physics
 			var collision_body = StaticBody3D.new()
@@ -327,3 +343,91 @@ func create_buildings():
 
 			# Add the building to the container
 			buildings_container.add_child(building) 
+
+func add_wall_sound_emitters(
+	parent_node: Node3D,
+	points: Array,                      # Array[Vector2] in local XZ (y -> Z)
+	height: float,
+	stream: AudioStream,
+	spacing: float = 5.0,               # meters between emitters
+	emitter_height: float = 0.5,        # from the base; try height*0.5 for mid-wall
+	outward_offset: float = 0.25,       # push emitters slightly outside
+	volume_db: float = -8.0,
+	max_distance: float = 12.0,
+	randomize_start: bool = true
+) -> void:
+	if points.size() < 2 or stream == null:
+		return
+
+	# Determine winding to know which side is "outside".
+	# Signed area > 0 => CCW; < 0 => CW (we ensured CW above, but double-check).
+	var area := 0.0
+	for i in range(points.size()):
+		var a: Vector2 = points[i]
+		var b: Vector2 = points[(i + 1) % points.size()]
+		area += a.x * b.y - b.x * a.y
+	var is_clockwise := area < 0.0
+
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+
+	for i in range(points.size()):
+		var a2: Vector2 = points[i]
+		var b2: Vector2 = points[(i + 1) % points.size()]
+		var seg: Vector2 = b2 - a2
+		var seg_len := seg.length()
+		if seg_len < 0.001:
+			continue
+		var dir: Vector2 = seg / seg_len
+
+		# Left normal = (-dy, dx). For CW polygon, outside is "left".
+		var left_normal := Vector2(-dir.y, dir.x)
+		var outward := left_normal if is_clockwise else -left_normal
+
+		# Place emitters from 0..seg_len with a step of `spacing`, include end.
+		var steps := int(floor(seg_len / spacing))
+		for s in range(steps + 1):
+			var dist = min(float(s) * spacing, seg_len)
+			var p2 = a2 + dir * dist + outward * outward_offset
+
+			# Your mesh maps (x, poly.y) -> (x, z = -poly.y)
+			var pos3 := Vector3(p2.x, clamp(emitter_height, 0.0, height), -p2.y)
+
+			var player := AudioStreamPlayer3D.new()
+			player.stream = stream
+			player.volume_db = volume_db
+			player.max_distance = max_distance
+			player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+			player.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_DISABLED
+			player.transform = Transform3D(Basis(), pos3)
+			player.autoplay = true
+
+			var sphere := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.2
+			sm.height = 0.2
+			sphere.mesh = sm
+			# Make it blue
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.2, 0.5, 1.0)  # light blue
+			sphere.material_override = mat
+			sphere.transform = Transform3D(Basis(), pos3)
+			parent_node.add_child(sphere)
+
+			# Optional: de-phase loops
+			if randomize_start:
+				var dur := 0.0
+				if stream is AudioStreamWAV:
+					dur = (stream as AudioStreamWAV).get_length()
+				elif stream is AudioStreamOggVorbis:
+					dur = (stream as AudioStreamOggVorbis).get_length()
+				elif stream is AudioStreamMP3:
+					dur = (stream as AudioStreamMP3).get_length()
+				if dur > 0.1:
+					player.play(rng.randf() * dur)
+				else:
+					player.autoplay = true
+			else:
+				player.autoplay = true
+
+			parent_node.add_child(player)
