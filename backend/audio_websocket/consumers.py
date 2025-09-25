@@ -165,6 +165,10 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
                 extra_args=None,
                 lat=float(lat) if lat else None,
                 lon=float(lon) if lon else None,
+                radius_m=1000,
+                out_limit=300,
+                k_nearest=5,
+
             )
             await self.stream_audio_bytes(output)
 
