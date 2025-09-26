@@ -8,6 +8,7 @@ var player: Node3D = null
 var websocket_audio_player: Node
 var boundary_detector: BoundaryDetector
 var polygons_system: Node3D
+var error_audio_player: AudioStreamPlayer
 
 func _ready():
 	command_label = Label.new()
@@ -37,6 +38,20 @@ func _ready():
 	add_child(polygons_system)
 		
 	print("🌿 Polygons system initialized")
+	
+	# Initialize error audio player
+	error_audio_player = AudioStreamPlayer.new()
+	error_audio_player.name = "ErrorAudioPlayer"
+	add_child(error_audio_player)
+	
+	# Load error audio file
+	var error_sound_path = "res://assets/audio/error.wav"
+	if ResourceLoader.exists(error_sound_path):
+		var error_stream = load(error_sound_path) as AudioStream
+		error_audio_player.stream = error_stream
+		print("✅ Loaded error.wav audio file")
+	else:
+		print("⚠️ Warning: Could not load error.wav")
 
 
 func update_command_label():
@@ -183,12 +198,18 @@ func _process_nominatim_result(result: Dictionary, location: String):
 	if parse_result != OK:
 		print("❌ Failed to parse JSON response")
 		command_label.text = "> Error: Invalid response from server"
+		# Play error sound
+		if error_audio_player and error_audio_player.stream:
+			error_audio_player.play()
 		return
 	
 	var data = json.data
 	if not data is Array or data.size() == 0:
 		print("❌ No results found for location: ", location)
 		command_label.text = "> No results found for: " + location
+		# Play error sound
+		if error_audio_player and error_audio_player.stream:
+			error_audio_player.play()
 		return
 	
 	# Get the first result
