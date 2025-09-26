@@ -11,53 +11,59 @@ var current_step := 0
 var steps = []
 var waiting_for_delay := false
 var tutorial_enabled: bool = true
-
-var hit_wall = "res://assets/audio/tutorial-steps/step_hit.mp3"
-var slide_wall = "res://assets/audio/tutorial-steps/step_slide.mp3"
-
+#var lang = 'en'
+var lang = 'fr'
 var hit = false
 var slide = false
+var base_path = "res://assets/audio/tutorial-steps/" + lang + "/"
 
-func _ready():
+var hit_wall = base_path + "step_hit.mp3"
+var slide_wall =  base_path + "step_slide.mp3"
+func _ready():	
 	# Define tutorial steps
 	steps = [
 		{
-			"audio": "res://assets/audio/tutorial-steps/step0.mp3",
+			"audio": base_path + "step0.mp3",
 			"delay": 1.0,
 			"condition": func(): return true  
 		},
 		{
-			"audio": "res://assets/audio/tutorial-steps/step1.mp3",
+			"audio":base_path + "step1.mp3",
 			"delay": 1.0,
 			"condition": func(): true
 		},
 		{
-			"audio": "res://assets/audio/tutorial-steps/step2.mp3",
+			"audio": base_path + "step2.mp3",
 			"delay": 1.0,
 			"condition": func(): return Input.is_action_just_pressed("skip_step")    # return when location entered 
 		},
 		{
-			"audio": "res://assets/audio/tutorial-steps/step3.mp3",
+			"audio": base_path + "step3.mp3",
 			"delay": 2.0,
 			"condition": func(): return Input.is_action_just_pressed("move_forward") or Input.is_action_just_pressed("move_back")
 		},
 		{
-			"audio": "res://assets/audio/tutorial-steps/step4.mp3",
+			"audio": base_path + "step4.mp3",
 			"delay": 2.0,
 			"condition": func(): return Input.is_action_just_pressed("turn_right") or Input.is_action_just_pressed("turn_left")
 		},
 		{
-			"audio": "res://assets/audio/tutorial-steps/step5.mp3",
+			"audio": base_path + "step5.mp3",
+			"delay": 3.0,
+			"condition": func(): return true
+		},
+		{
+			"audio": base_path + "step6_restart.mp3",
 			"delay": 3.0,
 			"condition": func(): return true
 		},
 				{
-			"audio": "res://assets/audio/tutorial-steps/step6.mp3",
+			"audio": base_path + "step6.mp3",
 			"delay": 1.0,
 			"condition": func(): return Input.is_action_just_pressed("skip_step") # return when AI interaction finishes 
 		},
 		{
-			"audio": "res://assets/audio/tutorial-steps/step7.mp3",
+			"audio": base_path + "step7.mp3",
 			"delay": 0.0,
 			"condition": func(): return true
 		}
