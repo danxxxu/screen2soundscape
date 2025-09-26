@@ -12,7 +12,8 @@ const GRID_STEP = 5.0
 
 #static var start = Vector2(52.372099, 4.892923)
 #static var start = Vector2(52.078247, 4.291105)
-static var start = Vector2(52.158919, 4.489398) # leiden
+#static var start = Vector2(50.670012, 4.614983) # louvan la neuf
+static var start = Vector2(51.586114, 4.776213) # breda mcdonalds
 
 
 # Scale factor to convert degrees to local units
