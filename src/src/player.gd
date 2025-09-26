@@ -70,13 +70,13 @@ func _input(event):
 				Speaker.speak('Road on the right.')
 			if event.pressed and event.keycode == KEY_Q:
 				Speaker.speak('Building on the left.')
-			if event.pressed and event.keycode == KEY_TAB:
-				if currentTarget == target:
-					currentTarget = target2
-					Speaker.speak('To the Fountain')
-				else:
-					currentTarget = target
-					Speaker.speak('To the elevator')
+			#if event.pressed and event.keycode == KEY_TAB:
+				#if currentTarget == target:
+					#currentTarget = target2
+					#Speaker.speak('To the Fountain')
+				#else:
+					#currentTarget = target
+					#Speaker.speak('To the elevator')
 			if event.pressed and event.keycode == KEY_T:
 				start_recording()
 				

@@ -1,14 +1,16 @@
-[gd_scene load_steps=23 format=3 uid="uid://cwrxsfnvowad6"]
+[gd_scene load_steps=21 format=3 uid="uid://cwrxsfnvowad6"]
 
 [ext_resource type="Script" uid="uid://dknww18ld512j" path="res://src/buildings.gd" id="1_buildings"]
 [ext_resource type="Script" uid="uid://qmilrc5e8c25" path="res://src/places.gd" id="1_places"]
 [ext_resource type="Script" uid="uid://dqbrpsrrjpmge" path="res://src/scene.gd" id="1_scene"]
+[ext_resource type="AudioStream" uid="uid://b7qtkoenhw6db" path="res://assets/audio/ambient-noise-236388.mp3" id="1_cy7eh"]
 [ext_resource type="Script" uid="uid://di0pwpkvun8we" path="res://src/boundary_detector.gd" id="1_tpwpp"]
 [ext_resource type="AudioStream" uid="uid://v7wc2di6xk1i" path="res://assets/audio/breeze.mp3" id="2_dqloj"]
 [ext_resource type="PackedScene" uid="uid://banloe8guvh8w" path="res://scenes/player.tscn" id="2_lveax"]
 [ext_resource type="Texture2D" uid="uid://bvci0n3rvsgtg" path="res://assets/images/rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
 [ext_resource type="AudioStream" uid="uid://bd8ljp4lxohf1" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://bm77jweqfq3jn" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
+[ext_resource type="PackedScene" uid="uid://dgxr5bab28udq" path="res://scenes/tutorial.tscn" id="10_7ftgl"]
 [ext_resource type="Script" uid="uid://brwups7vr8tqw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
 [ext_resource type="Script" uid="uid://xwf5ty2sr8tr" path="res://occlusion.gd" id="11_dqloj"]
 
@@ -80,7 +82,7 @@ offset_right = 1107.0
 offset_bottom = 393.0
 scale = Vector2(0.5, 0.5)
 text = "Screen to Soundscape Instructions: 
-Switch tutorial on/off - Press \"T\" 
+Switch tutorial help on/off - Press \"H\" 
 Skip a tutorial step - Press \"Tab\"
 Move forward/backward - \"Up/down\" arrow keys
 Turn left/right - \"Left/right\" arrow keys
@@ -153,3 +155,5 @@ script = ExtResource("1_tpwpp")
 
 [node name="occlusion" type="Node3D" parent="."]
 script = ExtResource("11_dqloj")
+
+[node name="Tutorial" parent="." instance=ExtResource("10_7ftgl")]

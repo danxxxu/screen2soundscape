@@ -34,7 +34,7 @@ func _ready():
 		{
 			"audio": "res://assets/audio/tutorial-steps/step2.mp3",
 			"delay": 1.0,
-			"condition": func(): get_location()    # return when location entered 
+			"condition": func(): return Input.is_action_just_pressed("skip_step")    # return when location entered 
 		},
 		{
 			"audio": "res://assets/audio/tutorial-steps/step3.mp3",
@@ -54,7 +54,7 @@ func _ready():
 				{
 			"audio": "res://assets/audio/tutorial-steps/step6.mp3",
 			"delay": 1.0,
-			"condition": func(): return true # return when AI interaction finishes 
+			"condition": func(): return Input.is_action_just_pressed("skip_step") # return when AI interaction finishes 
 		},
 		{
 			"audio": "res://assets/audio/tutorial-steps/step7.mp3",
@@ -152,8 +152,11 @@ func _on_step_delay_timeout() -> void:
 	waiting_for_delay = false
 	next_step()
 
-func get_location():
-	var location = false
-	print(scene.current_command)
-	location = true
-	return location
+#func get_location():
+	#var location = false
+	#print(scene.current_command)
+	#location = true
+	#return location
+	#
+#func ai_finished():
+	#return true
