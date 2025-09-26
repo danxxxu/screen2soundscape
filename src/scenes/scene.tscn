@@ -9,7 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://bvci0n3rvsgtg" path="res://assets/images/rocky_terrain_02_diff_4k.jpg" id="3_jbj3m"]
 [ext_resource type="AudioStream" uid="uid://bd8ljp4lxohf1" path="res://assets/audio/Shake and Bake.mp3" id="3_yxa1m"]
 [ext_resource type="AudioStream" uid="uid://bm77jweqfq3jn" path="res://assets/audio/mixkit-rain-loop-1250.wav" id="4_u6vwu"]
-[ext_resource type="Script" uid="uid://brwups7vr8tqw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
+[ext_resource type="Script" uid="uid://cw2xtqwodkskw" path="res://src/websocket_audio_player.gd" id="9_3ingr"]
 [ext_resource type="PackedScene" uid="uid://dgxr5bab28udq" path="res://scenes/tutorial.tscn" id="10_7ftgl"]
 [ext_resource type="Script" uid="uid://xwf5ty2sr8tr" path="res://occlusion.gd" id="11_dqloj"]
 

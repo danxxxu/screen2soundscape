@@ -61,15 +61,10 @@ func _input(event):
 				if not distance_audio.playing: # Prevent re-triggering
 					distance_audio.play()
 			elif not event.pressed and event.keycode == KEY_SHIFT:
-				distance_audio.stop()  # Stop when Shift is released
-				
+				distance_audio.stop()  # Stop when Shift is released				
 			if event.pressed and event.keycode == KEY_SHIFT:
 				if not distance_audio.playing: # Prevent re-triggering
-					distance_audio.play()
-			if event.pressed and event.keycode == KEY_E:
-				Speaker.speak('Road on the right.')
-			if event.pressed and event.keycode == KEY_Q:
-				Speaker.speak('Building on the left.')
+					distance_audio.play()			
 			if event.pressed and event.keycode == KEY_T:
 				start_recording()
 				
