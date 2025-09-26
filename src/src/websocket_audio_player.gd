@@ -89,7 +89,8 @@ func send_command(command_text: String):
 	var message = {
 		"message": command_text,
 		"lat": coords.lat,
-		"lon": coords.lon
+		"lon": coords.lon,
+		"lang": 'fr'
 	}
 	
 	if websocket and websocket.get_ready_state() == WebSocketPeer.STATE_OPEN:
