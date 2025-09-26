@@ -7,6 +7,7 @@ signal connection_failed
 
 var websocket: WebSocketPeer
 var audio_stream_player: AudioStreamPlayer
+var waiting_ai_player: AudioStreamPlayer
 var audio_buffer: PackedByteArray
 var is_streaming: bool = false
 var is_connected: bool = false
@@ -14,6 +15,11 @@ var is_audio_ready: bool = false
 var reconnection_attempts: int = 0
 var max_reconnection_attempts: int = 5
 var reconnection_delay: float = 1.0
+
+# Waiting AI timeout
+var waiting_ai_timer: float = 0.0
+var max_waiting_timeout: float = 20.0
+var is_waiting_ai_playing: bool = false
 
 # Chunk tracking system
 var sent_chunks: Dictionary = {}  # chunk_index -> {data, timestamp, retry_count}
@@ -41,11 +47,25 @@ func _ready():
 	audio_stream_player = AudioStreamPlayer.new()
 	add_child(audio_stream_player)
 	
+	# Create waiting AI audio player
+	waiting_ai_player = AudioStreamPlayer.new()
+	add_child(waiting_ai_player)
+	
+	# Load waiting AI audio
+	var waiting_ai_path = "res://assets/audio/waiting_ai.wav"
+	if ResourceLoader.exists(waiting_ai_path):
+		var waiting_ai_stream = load(waiting_ai_path) as AudioStream
+		waiting_ai_player.stream = waiting_ai_stream
+		print("Loaded waiting_ai audio file")
+	else:
+		print("Warning: Could not load waiting_ai.wav")
+	
 	# Get reference to player
 	player = get_node("../Player")
 	
 	# Connect signals
 	audio_stream_player.finished.connect(_on_audio_finished)
+	waiting_ai_player.finished.connect(_on_waiting_ai_finished)
 	
 	# Connect our custom signals
 	connection_established.connect(_on_connection_established)
@@ -82,6 +102,9 @@ func get_player_coordinates() -> Dictionary:
 	return {"lat": global_coords.x, "lon": global_coords.y}
 
 func send_command(command_text: String):
+	# Start playing waiting AI audio
+	_start_waiting_ai_audio()
+	
 	# Get player coordinates
 	var coords = get_player_coordinates()
 	
@@ -104,9 +127,18 @@ func send_command(command_text: String):
 	else:
 		print("WebSocket not connected. Press F5 to manually reconnect.")
 		print("Cannot send command: ", command_text)
+		# Stop waiting AI if connection fails
+		_stop_waiting_ai_audio()
 
 func _process(delta):
 	websocket.poll()
+	
+	# Update waiting AI timer
+	if is_waiting_ai_playing:
+		waiting_ai_timer += delta
+		if waiting_ai_timer >= max_waiting_timeout:
+			print("Waiting AI timeout reached, stopping audio")
+			_stop_waiting_ai_audio()
 	
 	# Check for missing chunks periodically
 	if sent_chunks.size() > 0:
@@ -143,6 +175,8 @@ func _process(delta):
 								print("Audio stream completed: ", data["message"])
 								is_streaming = false
 								is_audio_ready = true
+								# Stop waiting AI when audio stream is completed/ready
+								_stop_waiting_ai_audio()
 								audio_stream_completed.emit()
 								_play_audio_buffer()  # Play the complete audio
 							elif data["type"] == "ack":
@@ -154,6 +188,8 @@ func _process(delta):
 						is_streaming = true
 						audio_buffer.clear()
 						print("Starting to receive audio stream...")
+						# Stop waiting AI audio when receiving audio data back
+						_stop_waiting_ai_audio()
 						audio_stream_started.emit()
 					
 					# Append binary data to buffer
@@ -192,6 +228,12 @@ func _play_audio_buffer():
 func _on_audio_finished():
 	print("Audio playback finished")
 
+func _on_waiting_ai_finished():
+	print("Waiting AI audio finished")
+	if is_waiting_ai_playing:
+		# Loop the waiting AI audio if it finished and we're still waiting
+		waiting_ai_player.play()
+
 func _on_connection_established():
 	print("WebSocket connection established")
 	reconnection_attempts = 0  # Reset reconnection attempts on successful connection
@@ -228,6 +270,9 @@ func disconnect_from_server():
 		print("Disconnected from WebSocket server")
 
 func send_audio_data(audio_data: String):
+	# Start playing waiting AI audio when sending voice data
+	_start_waiting_ai_audio()
+	
 	# Get player coordinates
 	var coords = get_player_coordinates()
 	
@@ -246,8 +291,14 @@ func send_audio_data(audio_data: String):
 	else:
 		print("WebSocket not connected. Press F5 to manually reconnect.")
 		print("Cannot send audio file")
+		# Stop waiting AI if connection fails
+		_stop_waiting_ai_audio()
 
 func send_audio_chunk(audio_chunk: String, chunk_index: int, total_chunks: int):
+	# Start playing waiting AI audio when sending first chunk
+	if chunk_index == 0:
+		_start_waiting_ai_audio()
+	
 	# Get player coordinates
 	var coords = get_player_coordinates()
 	
@@ -278,6 +329,9 @@ func send_audio_chunk(audio_chunk: String, chunk_index: int, total_chunks: int):
 	else:
 		print("WebSocket not connected. Press F5 to manually reconnect.")
 		print("Cannot send audio chunk: ", chunk_index)
+		# Stop waiting AI if connection fails (only for first chunk failure)
+		if chunk_index == 0:
+			_stop_waiting_ai_audio()
 
 func _handle_acknowledgment(data: Dictionary):
 	# Extract chunk number from acknowledgment message
@@ -345,6 +399,22 @@ func _clear_transmission_data():
 func start_new_transmission():
 	_clear_transmission_data()
 	print("Started new transmission with ID: ", current_transmission_id)
+
+func _start_waiting_ai_audio():
+	if waiting_ai_player and waiting_ai_player.stream:
+		print("Starting waiting AI audio")
+		waiting_ai_player.play()
+		is_waiting_ai_playing = true
+		waiting_ai_timer = 0.0
+	else:
+		print("Warning: Could not start waiting AI audio - file not loaded")
+
+func _stop_waiting_ai_audio():
+	if waiting_ai_player:
+		waiting_ai_player.stop()
+		is_waiting_ai_playing = false
+		waiting_ai_timer = 0.0
+		print("Stopped waiting AI audio")
 
 func _exit_tree():
 	disconnect_from_server() 

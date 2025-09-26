@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://cyrtlo4rvk85"
-path="res://.godot/imported/waiting_ai.wav-9f903961b012925004ee5c8def1d4f1d.sample"
+path="res://.godot/imported/waiting_ai.wav-ce925172a1edad3cf132d4573d4828c3.sample"
 
 [deps]
 
-source_file="res://assets/audio/places/waiting_ai.wav"
-dest_files=["res://.godot/imported/waiting_ai.wav-9f903961b012925004ee5c8def1d4f1d.sample"]
+source_file="res://assets/audio/waiting_ai.wav"
+dest_files=["res://.godot/imported/waiting_ai.wav-ce925172a1edad3cf132d4573d4828c3.sample"]
 
 [params]
 
