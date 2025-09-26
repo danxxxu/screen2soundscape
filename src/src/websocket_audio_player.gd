@@ -18,7 +18,7 @@ var reconnection_delay: float = 1.0
 
 # Waiting AI timeout
 var waiting_ai_timer: float = 0.0
-var max_waiting_timeout: float = 40.0
+var max_waiting_timeout: float = 60.0
 var is_waiting_ai_playing: bool = false
 
 # Chunk tracking system
