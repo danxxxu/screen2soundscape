@@ -70,13 +70,6 @@ func _input(event):
 				Speaker.speak('Road on the right.')
 			if event.pressed and event.keycode == KEY_Q:
 				Speaker.speak('Building on the left.')
-			#if event.pressed and event.keycode == KEY_TAB:
-				#if currentTarget == target:
-					#currentTarget = target2
-					#Speaker.speak('To the Fountain')
-				#else:
-					#currentTarget = target
-					#Speaker.speak('To the elevator')
 			if event.pressed and event.keycode == KEY_T:
 				start_recording()
 				
@@ -108,7 +101,6 @@ func update_pitch(distance):
 func _ready():
 	var current_place = "the Kerkplein"
 	var to_find = "Cafe Dok 19"
-	#	Speaker.speak(" Hello ! You are at " + current_place + " facing north. Find " + to_find + ". Press shift to hear the proximity sensor to the search place. To move around use W. A. S. D. To turn use left and right arrows. When you hear the name of the place, stop. Hit enter and type word address. Hit enter again to hear the address.", "fr")
 	
 	# Setup microphone recording
 	setup_microphone_recording()

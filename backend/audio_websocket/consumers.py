@@ -57,8 +57,10 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             message_type = data.get("type", "")
-            lat = data.get("lat")
-            lon = data.get("lon")
+            lat = data.get("lat", self.DEFAULT_LAT)
+            lon = data.get("lon", self.DEFAULT_LON)
+            lang = data.get("lang", 'en')
+            speaker = data.get("speaker", 'amy')
 
             print((lat, lon))
             # Handle audio data type
@@ -146,8 +148,8 @@ class AudioStreamConsumer(AsyncWebsocketConsumer):
 
             # Process the message (either original text or transcribed text)
             output = run_assistant.main(
-                speaker=self.DEFAULT_SPEAKER,
-                language=self.DEFAULT_LANG,
+                speaker=speaker,
+                language=lang,
                 speed=1.0,
                 text=message,
                 text_file=None,

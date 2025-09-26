@@ -52,26 +52,17 @@ func update_command_label():
 
 func execute_command(cmd: String):
 	if cmd.begins_with("goto "):
-		var location = cmd.substr(5).strip_edges()  # Remove "goto " prefix
+		var location = cmd.substr(5).strip_edges()
 		await _handle_goto_command(location)
 		return
-	
+	if cmd.begins_with("go to "):
+		var location = cmd.substr(6).strip_edges() 
+		await _handle_goto_command(location)
+		return
 	if cmd.begins_with("restart") or cmd.begins_with("reset"):
 		reset_player()
 		return
-	match cmd.to_lower():
-		"address":
-			if current_place and current_place.place_data:
-				var address = ""
-				var tags = current_place.place_data.tags
-				if tags.has("addr:street"):
-					address += tags["addr:street"]
-					if tags.has("addr:housenumber"):
-						address += " " + tags["addr:housenumber"]
-				if address != "":
-					current_place.speak(address)
-				else:
-					current_place.speak("No address available")
+	match cmd.to_lower():		
 		_:
 			# Send unknown commands to WebSocket
 			print("Sending command to WebSocket: ", cmd)
