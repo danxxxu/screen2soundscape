@@ -54,6 +54,9 @@ var websocket_audio_player: Node
 func set_movement_enabled(enabled: bool):
 	_movement_enabled = enabled
 
+func get_movement_enabled() -> bool:
+	return _movement_enabled
+
 func _input(event):
 	if event is InputEventKey:
 		if _movement_enabled:

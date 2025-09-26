@@ -126,6 +126,8 @@ func _process(delta):
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("tutorial_toggle"):
+		if not player.get_movement_enabled():
+			return  # Don't respond to H key when movement is disabled
 		tutorial_enabled = !tutorial_enabled
 		print("Tutorial toggled:", tutorial_enabled)
 		if not tutorial_enabled:
