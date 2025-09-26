@@ -30,7 +30,7 @@ func _ready():
 		{
 			"audio":base_path + "step1.mp3",
 			"delay": 1.0,
-			"condition": func(): true
+			"condition": func(): return true
 		},
 		{
 			"audio": base_path + "step2.mp3",
