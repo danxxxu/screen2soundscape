@@ -21,7 +21,7 @@ static func speak(text: String, lang: String = "en-US"):
 #        else:
 #            DisplayServer.tts_speak(text, lang)
 		const interrupt = true
-		DisplayServer.tts_speak(text, lang, 50, 1, 1.1, 1, interrupt)
+		DisplayServer.tts_speak(text, lang, 100, 1, 1.1, 1, interrupt)
 
 
 static func stop_speaking():
