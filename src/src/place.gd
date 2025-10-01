@@ -69,7 +69,7 @@ func _setup_place_data():
 		if sound:
 			ambient_player.stream = sound
 			ambient_player.stream.loop = true
-			ambient_player.add_to_group("occludable_audio")
+			#ambient_player.add_to_group("occludable_audio")
 			ambient_player.play()
 			
 			var start_offset := 0.0

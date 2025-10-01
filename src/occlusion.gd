@@ -10,6 +10,7 @@ extends Node
 @export var open_cutoff_hz := 24000.0
 @export var lerp_speed := 0.15  # 0..1 per physics frame
 
+# todo at some point blocks all the sound, investigate
 func _physics_process(_dt: float) -> void:
 	var listener := get_viewport().get_camera_3d()
 	if listener == null:

@@ -8,24 +8,6 @@ var building_material: StandardMaterial3D
 var emitter_dict := {}  # Dictionary[Vector3i, Array[AudioStreamPlayer3D]]
 var CELL_SIZE := 15.0    # same as your check radius
 
-func _has_nearby_emitter(pos: Vector3, stream: AudioStream, radius: float = 5.0) -> bool:
-	var cell := _cell_key(pos)
-	var r := int(ceil(radius / CELL_SIZE))
-
-	for x in range(cell.x - r, cell.x + r + 1):
-		for y in range(cell.y - r, cell.y + r + 1):
-			for z in range(cell.z - r, cell.z + r + 1):
-				var key := Vector3i(x, y, z)
-				if not emitter_dict.has(key):
-					continue
-				for node in emitter_dict[key]:
-					if node and node.stream:
-						var same = node.stream == stream \
-							or (stream.resource_path != "" and node.stream.resource_path == stream.resource_path)
-						if same and node.global_position.distance_to(pos) <= radius:
-							return true
-	return false
-	
 func _cell_key(pos: Vector3) -> Vector3i:
 	return Vector3i(
 		int(floor(pos.x / CELL_SIZE)),
@@ -177,7 +159,6 @@ func sort_points_clockwise(points: Array) -> Array:
 
 	return sorted_points
 
-	# Returns a positive value for CCW order, negative for CW, 0 for a line.
 func _signed_area(points: Array) -> float:
 	var a := 0.0
 	for i in range(points.size()):
@@ -257,37 +238,6 @@ func create_extruded_polygon(points: Array, height: float) -> MeshInstance3D:
 	mesh_instance.mesh = st.commit()
 	return mesh_instance
 
-func add_building_proximity(building_points: Array, building: MeshInstance3D) -> Area3D:
-	# Add proximity detection area (10 units larger than the building)
-	var proximity_area = Area3D.new()
-	var proximity_shape = CollisionShape3D.new()
-	
-	# Create a convex shape from the building points with padding
-	var padded_points = []
-	var center = Vector2()
-	for p in building_points:
-		center += p
-	center /= building_points.size()
-	
-	# Expand each point outward from center by 10 units
-	for p in building_points:
-		var direction = (p - center).normalized()
-		var padded_point = p + direction * 10.0  # 10 unit padding
-		padded_points.append(Vector2(padded_point.x, padded_point.y))
-	
-	# Create the proximity detection shape
-	var proximity_building = create_extruded_polygon(padded_points, EXTRUDE_HEIGHT + 2.0)
-	var proximity_collision_shape = proximity_building.mesh.create_trimesh_shape()
-	proximity_shape.shape = proximity_collision_shape
-	
-	proximity_area.add_child(proximity_shape)
-	building.add_child(proximity_area)
-	
-	# Add the proximity area to the building_proximity group
-	proximity_area.add_to_group("building_proximity")
-	
-	return proximity_area
-
 func create_buildings():
 	if not building_data.has("elements"):
 		return
@@ -346,9 +296,6 @@ func create_buildings():
 			collision_body.add_to_group("buildings")
 			collision_body.add_to_group("occludable_audio")
 
-			# Add proximity detection using the extracted method
-			add_building_proximity(building_points, building)
-
 			# Add the building to the container
 			buildings_container.add_child(building) 
 			add_wall_sound_emitters(
@@ -374,7 +321,7 @@ func add_wall_sound_emitters(
 	emitter_height: float = 0.5,        # from the base; try height*0.5 for mid-wall
 	outward_offset: float = 0.25,       # push emitters slightly outside
 	volume_db: float = -8.0,
-	max_distance: float = 12.0,
+	max_distance: float = 20.0,
 	randomize_start: bool = true
 ) -> void:
 	if points.size() < 2 or stream == null:
