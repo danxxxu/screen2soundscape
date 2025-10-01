@@ -9,6 +9,7 @@ var websocket_audio_player: Node
 var boundary_detector: BoundaryDetector
 var polygons_system: Node3D
 var error_audio_player: AudioStreamPlayer
+var keyboard_audio_player: AudioStreamPlayer
 
 func _ready():
 	command_label = Label.new()
@@ -52,6 +53,12 @@ func _ready():
 		print("✅ Loaded error.wav audio file")
 	else:
 		print("⚠️ Warning: Could not load error.wav")
+	
+	keyboard_audio_player = AudioStreamPlayer.new()
+	keyboard_audio_player.name = "keyboard_audio_player"
+	add_child(keyboard_audio_player)
+	var keyboard_stream = load("res://assets/audio/keyboard.mp3")
+	keyboard_audio_player.stream = keyboard_stream
 
 
 func update_command_label():
@@ -89,6 +96,17 @@ func execute_command(cmd: String):
 func _input(event):
 	if event is InputEventKey:
 		if event.pressed:
+			if event.keycode == KEY_R and event.ctrl_pressed:
+				reset_player()
+			if event.keycode == KEY_P and event.ctrl_pressed and event.shift_pressed:
+				target_reset()
+			if event.keycode == KEY_P and event.ctrl_pressed:
+				if command_mode:
+					await _handle_set_target_command(current_command)
+					current_command = ""
+					command_mode = false	
+					keyboard_audio_player.stop()
+					update_command_label()			
 			if event.keycode == KEY_ENTER:
 				# Check if Shift is pressed for goto command mode
 				if event.shift_pressed:
@@ -97,9 +115,9 @@ func _input(event):
 						current_command = "goto " + current_command
 						await execute_command(current_command)	
 						current_command = ""
-						command_mode = false	
+						command_mode = false
+						keyboard_audio_player.stop()	
 						update_command_label()			
-											
 				else:
 					# Regular Enter: Toggle command mode or execute command
 					if command_mode:
@@ -107,15 +125,18 @@ func _input(event):
 						await execute_command(current_command)
 						current_command = ""
 						command_mode = false
+						keyboard_audio_player.stop()
 					else:
 						# Enter command mode
 						command_mode = true
+						keyboard_audio_player.play()
 					update_command_label()
 			elif command_mode:
 				if event.keycode == KEY_BACKSPACE:
 					current_command = current_command.substr(0, max(0, current_command.length() - 1))
 				elif event.keycode == KEY_ESCAPE:
 					command_mode = false
+					keyboard_audio_player.stop()
 					current_command = ""
 				elif event.is_pressed() and not event.echo:
 					var char = char(event.unicode)
@@ -154,7 +175,20 @@ func _handle_goto_command(location: String):
 		return
 	
 	# Process the result
-	await _process_nominatim_result(result, location)
+	var start = await _process_nominatim_result(result, location)
+	move_start(start)
+
+# Handle goto command - search for location and update start position
+func _handle_set_target_command(location: String):
+	command_label.text = "> Searching for " + location + "..."
+	var encoded_location = location.uri_encode()
+	var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encoded_location
+	var result = await _make_http_request(url)
+	if result == null || result == {}:
+		command_label.text = "> Error: Failed to search for location"
+		return
+	var location_vec = await _process_nominatim_result(result, location)
+	move_target(location_vec)
 
 # Make HTTP request using await
 func _make_http_request(url: String) -> Dictionary:
@@ -210,6 +244,7 @@ func _process_nominatim_result(result: Dictionary, location: String):
 		# Play error sound
 		if error_audio_player and error_audio_player.stream:
 			error_audio_player.play()
+		Speaker.speak("Try again")
 		return
 	
 	# Get the first result
@@ -217,20 +252,27 @@ func _process_nominatim_result(result: Dictionary, location: String):
 	var lat = float(nom_result["lat"])
 	var lon = float(nom_result["lon"])
 	var display_name = nom_result["display_name"]
-	
-	# Update the start location in MapUtils
-	MapUtils.start = Vector2(lat, lon)
-	print("🔄 Updated start location to: ", MapUtils.start)
-	
-	# Clear existing data and refetch for new area using boundary detector
-	await _clear_and_refetch_data()
-	
-	reset_player()
-	command_label.text = "> Moved to: " + display_name
+	return Vector2(lat, lon)
 
+func move_start(start):
+	MapUtils.start = start
+	print("🔄 Updated start location to: ", MapUtils.start)
+	await _clear_and_refetch_data()
+	reset_player()
+
+func move_target(location):
+	var local = MapUtils.convert_to_local_coords(location.x, location.y)
+	$Target.global_position = Vector3(local.x, 1, -local.y) 
+	Speaker.speak("Target is set")
+
+func target_reset():
+	$Target.global_position = Vector3(0, 1, 0) 
+	Speaker.speak("Target is set to start")
+	
 func reset_player():
 	if player:
 		player.global_position = Vector3(0, player.global_position.y, 0)
+		Speaker.speak("Reset to the start")
 
 		
 # Clear existing data and refetch for new area using boundary detector
@@ -244,7 +286,7 @@ func _clear_and_refetch_data():
 	# Clear existing data using boundary detector's method
 	boundary_detector._clear_existing_data()
 	print("🧹 Cleared existing data")
-	
+		
 	# Clear loaded cells and reset boundary detector
 	boundary_detector.LoadedCels.clear()
 	boundary_detector.current_cell = Vector2i.ZERO

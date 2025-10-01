@@ -131,6 +131,7 @@ func _input(event: InputEvent) -> void:
 		tutorial_enabled = !tutorial_enabled
 		print("Tutorial toggled:", tutorial_enabled)
 		if not tutorial_enabled:
+			Speaker.speak("off")
 			narration_player.stop()
 			AudioServer.set_bus_mute(AudioServer.get_bus_index("STS"), false)
 

@@ -25,8 +25,6 @@ background_mode = 2
 sky = SubResource("Sky_6xlsm")
 tonemap_mode = 2
 
-[sub_resource type="BoxMesh" id="BoxMesh_u8caj"]
-
 [sub_resource type="LabelSettings" id="LabelSettings_7ftgl"]
 font_size = 36
 outline_size = 4
@@ -52,7 +50,11 @@ size = Vector3(1000, 1, 1000)
 transparency = 1
 cull_mode = 1
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5yiy0"]
+albedo_color = Color(0.407843, 0, 1, 1)
+
 [sub_resource type="BoxMesh" id="BoxMesh_jkbgw"]
+material = SubResource("StandardMaterial3D_5yiy0")
 
 [node name="Scene" type="Node3D"]
 script = ExtResource("1_scene")
@@ -68,10 +70,6 @@ directional_shadow_mode = 0
 directional_shadow_fade_start = 0.925
 directional_shadow_max_distance = 86.0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="DirectionalLight3D"]
-transform = Transform3D(1, 7.45058e-09, -1.49012e-08, -1.11759e-07, 1, 2.98023e-08, 5.21541e-08, 0, 1, 20.7824, -17.5831, -16.4558)
-mesh = SubResource("BoxMesh_u8caj")
-
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Label" type="Label" parent="HUD"]
@@ -85,7 +83,16 @@ Switch tutorial help on/off - Press \"H\"
 Skip a tutorial step - Press \"Tab\"
 Move forward/backward - \"Up/down\" arrow keys
 Turn left/right - \"Left/right\" arrow keys
-AI assistant - Press \"Enter\" and type in or record questions"
+AI assistant - Press \"Enter\" and type in or record questions the press enter to submit
+Navigation - Press \"Enter\" then type the location then press \"Shift+Enter\" to go to the location you have typed
+Reset - Press \"Ctrl+R\" to reset to the starting position.
+
+Target:
+To hear the distance to the target hold shift.
+By default target is at start. To set target hit enter, type address and hit ctrl+p
+To reset to start target hit ctrl+shift+p
+
+"
 label_settings = SubResource("LabelSettings_7ftgl")
 
 [node name="Background Sound" type="AudioStreamPlayer" parent="."]
@@ -117,15 +124,14 @@ shape = SubResource("BoxShape3D_a6j3j")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 0)
 
 [node name="Target" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.49903, 1.49031, 41.1938)
-visible = false
+transform = Transform3D(0.763084, -0.410351, 0.499315, 0.499315, 0.864838, -0.052336, -0.410351, 0.289252, 0.864838, 1, 1, -5)
 mesh = SubResource("BoxMesh_jkbgw")
 skeleton = NodePath("AudioStreamPlayer3D")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Target"]
 transform = Transform3D(3.1746, 0, 0, 0, 3.1746, 0, 0, 0, 3.1746, 0, 0, 0)
 stream = ExtResource("3_yxa1m")
-volume_db = -15.89
+volume_db = -13.093
 
 [node name="RainTarget" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.0213, 1.49, 8.5704)

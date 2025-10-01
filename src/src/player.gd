@@ -47,6 +47,7 @@ var surface_check_distance: float = 5.0  # Check surface type every 5 units
 # Microphone recording variables
 var is_recording: bool = false
 var audio_stream_player: AudioStreamPlayer
+var done_player: AudioStreamPlayer
 var audio_effect_record: AudioEffectRecord
 var recording: AudioStreamWAV
 var websocket_audio_player: Node
@@ -81,6 +82,9 @@ func _process(delta):
 	if currentTarget:
 		var distance: float = global_position.distance_to(currentTarget.global_position)
 		update_pitch(distance)
+		
+			
+			
 	
 	# Update houses sound volume based on building proximity
 	if is_near_buildings:
@@ -94,11 +98,18 @@ func update_pitch(distance):
 	var pitch_value = lerp(max_pitch, min_pitch, normalized)
 	# Apply pitch to audio player
 	distance_audio.pitch_scale = pitch_value
+	
 
 
 func _ready():
 	var current_place = "the Kerkplein"
 	var to_find = "Cafe Dok 19"
+	
+	done_player = AudioStreamPlayer.new()
+	done_player.name = "done_player"
+	add_child(done_player)
+	done_player.stream = load("res://assets/audio/done.mp3")
+	done_player.stream.loop = true
 	
 	# Setup microphone recording
 	setup_microphone_recording()
@@ -195,9 +206,9 @@ func _on_area_entered(area):
 		is_near_buildings = true
 		building_proximity_areas.append(area)
 		# Play houses sound when near buildings (within 10 units)
-		if not houses_audio.playing:
-			houses_audio.play()
-		update_houses_volume()
+		#if not houses_audio.playing:
+			#houses_audio.play()
+		#update_houses_volume()
 	else:
 		print("Area is not in building_proximity group")
 
