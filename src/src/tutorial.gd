@@ -52,21 +52,37 @@ func _ready():
 			"delay": 3.0,
 			"condition": func(): return true
 		},
-		{
-			"audio": base_path + "step6_restart.mp3",
-			"delay": 3.0,
-			"condition": func(): return true
-		},
 				{
 			"audio": base_path + "step6.mp3",
-			"delay": 1.0,
-			"condition": func(): return Input.is_action_just_pressed("skip_step") # return when AI interaction finishes 
+			"delay": 5.0,
+			"condition": func(): return true 
 		},
 		{
 			"audio": base_path + "step7.mp3",
-			"delay": 0.0,
+			"delay": 3.0,
+			"condition": func(): return true
+		},
+		{
+			"audio": base_path + "step8.mp3",
+			"delay": 3.0,
+			"condition": func(): return true
+		},
+		{
+			"audio": base_path + "step9.mp3",
+			"delay": 3.0,
+			"condition": func(): return true
+		},
+		{
+			"audio": base_path + "step10.mp3",
+			"delay": 1.0,
+			"condition": func(): return Input.is_action_just_pressed("skip_step")
+		},
+		{
+			"audio": base_path + "step11.mp3",
+			"delay": 1.0,
 			"condition": func(): return true
 		}
+		
 	]
 	start_step(0)
 
